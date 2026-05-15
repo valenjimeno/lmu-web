@@ -1,11 +1,11 @@
 export function ProfileCard() {
   return (
-    <section className="rounded-[2rem] border border-border bg-surface p-6">
-      <p className="text-sm font-medium text-accent">Perfil</p>
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight">Estructura preparada</h2>
+    <section className="app-shell-card rounded-[2rem] p-6">
+      <p className="section-kicker text-xs font-semibold">Perfil</p>
+      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">Cockpit personal</h2>
       <p className="mt-3 max-w-xl text-sm leading-7 text-muted">
-        Aquí conectaremos el perfil del usuario cuando definamos el contrato entre la app iOS y la
-        versión web.
+        Aquí iremos conectando preferencias, identidad del piloto y ajustes personales para que la
+        experiencia web conserve la misma coherencia premium que la app iOS.
       </p>
     </section>
   );

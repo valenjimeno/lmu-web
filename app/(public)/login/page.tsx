@@ -26,14 +26,23 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl items-center px-6 py-16">
-      <div className="w-full rounded-[2rem] border border-border bg-surface p-8 shadow-[0_24px_80px_rgba(75,59,31,0.08)]">
-        <div className="mb-8 space-y-2">
-          <p className="text-sm font-medium text-accent">Acceso</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Inicio de sesión</h1>
+    <main className="mx-auto flex min-h-screen w-full max-w-xl items-center py-8">
+      <div className="app-shell-card w-full rounded-[2rem] p-8 sm:p-9">
+        <div className="mb-8 space-y-3">
+          <p className="section-kicker text-xs font-semibold">Acceso privado</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Inicia sesión</h1>
           <p className="text-sm leading-7 text-muted">
-            Accede con tu email y password de Supabase Auth. Si la sesión ya existe, esta ruta te
-            lleva directamente a la zona privada donde empezaremos por el flujo de setups.
+            Entra a tu garage personal para crear, filtrar y revisar setups con una experiencia
+            optimizada primero para móvil.
+          </p>
+        </div>
+        <div className="mb-6 rounded-[1.5rem] border border-white/8 bg-black/20 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffbc7e]">
+            Apex-inspired flow
+          </p>
+          <p className="mt-2 text-sm text-muted">
+            Pantallas oscuras, bloques claros y acciones primarias muy visibles para sentirse como
+            una app nativa moderna.
           </p>
         </div>
         <LoginForm errorMessage={errorMessage} />

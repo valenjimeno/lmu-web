@@ -173,6 +173,8 @@ export type Database = {
           search_document: unknown;
           setup_type: Database['public']['Enums']['setup_type'];
           tc: number | null;
+          tc_power_cut: number | null;
+          tc_slip_angle: number | null;
           team_id: string | null;
           track_id: string;
           updated_at: string;
@@ -194,6 +196,8 @@ export type Database = {
           search_document?: unknown;
           setup_type: Database['public']['Enums']['setup_type'];
           tc?: number | null;
+          tc_power_cut?: number | null;
+          tc_slip_angle?: number | null;
           team_id?: string | null;
           track_id: string;
           updated_at?: string;
@@ -215,6 +219,8 @@ export type Database = {
           search_document?: unknown;
           setup_type?: Database['public']['Enums']['setup_type'];
           tc?: number | null;
+          tc_power_cut?: number | null;
+          tc_slip_angle?: number | null;
           team_id?: string | null;
           track_id?: string;
           updated_at?: string;
