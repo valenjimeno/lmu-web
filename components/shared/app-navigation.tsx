@@ -5,11 +5,7 @@ import { usePathname } from 'next/navigation';
 import { routes } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils/cn';
 
-const items = [
-  { href: routes.dashboard, label: 'Garage', icon: 'grid' },
-  { href: routes.setups, label: 'Setups', icon: 'speed' },
-  { href: routes.settings, label: 'Perfil', icon: 'user' },
-] as const;
+const items = [{ href: routes.setups, label: 'Setups', icon: 'speed' }] as const;
 
 type AppNavigationProps = {
   orientation?: 'horizontal' | 'vertical';
@@ -38,11 +34,11 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
             key={item.href}
             href={item.href}
             className={cn(
-              'flex items-center gap-3 rounded-[1.4rem] px-4 py-3 text-sm font-semibold transition duration-200',
+              'flex items-center gap-3 rounded-[1.35rem] px-4 py-3 text-sm font-semibold transition duration-200',
               isHorizontal ? 'shrink-0' : 'block',
               isActive
-                ? 'border border-white/10 bg-[var(--gradient-accent)] text-accent-foreground shadow-[0_14px_28px_rgba(255,100,31,0.28)]'
-                : 'border border-transparent bg-white/4 text-muted hover:border-white/8 hover:bg-white/7 hover:text-foreground',
+                ? 'border border-[rgba(225,178,122,0.24)] bg-[linear-gradient(135deg,rgba(225,178,122,0.16),rgba(255,255,255,0.08))] text-white shadow-[0_14px_28px_rgba(0,0,0,0.26)]'
+                : 'border border-transparent bg-transparent text-muted hover:border-white/8 hover:bg-white/[0.05] hover:text-foreground',
             )}
           >
             <NavIcon type={item.icon} />
@@ -54,25 +50,8 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
   );
 }
 
-function NavIcon({ type }: { type: 'grid' | 'speed' | 'user' }) {
+function NavIcon({ type }: { type: 'speed' | 'settings' }) {
   const className = 'h-[18px] w-[18px] shrink-0';
-
-  if (type === 'grid') {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        className={className}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        <rect x="3.5" y="3.5" width="7" height="7" rx="2.2" />
-        <rect x="13.5" y="3.5" width="7" height="7" rx="2.2" />
-        <rect x="3.5" y="13.5" width="7" height="7" rx="2.2" />
-        <rect x="13.5" y="13.5" width="7" height="7" rx="2.2" />
-      </svg>
-    );
-  }
 
   if (type === 'speed') {
     return (
@@ -99,8 +78,15 @@ function NavIcon({ type }: { type: 'grid' | 'speed' | 'user' }) {
       stroke="currentColor"
       strokeWidth="1.8"
     >
-      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-      <path d="M5 20a7 7 0 0 1 14 0" strokeLinecap="round" />
+      <path d="M12 3.75v3" strokeLinecap="round" />
+      <path d="M12 17.25v3" strokeLinecap="round" />
+      <path d="M5.64 6.14l2.12 2.12" strokeLinecap="round" />
+      <path d="M16.24 16.74l2.12 2.12" strokeLinecap="round" />
+      <path d="M3.75 12h3" strokeLinecap="round" />
+      <path d="M17.25 12h3" strokeLinecap="round" />
+      <path d="M5.64 17.86l2.12-2.12" strokeLinecap="round" />
+      <path d="M16.24 7.26l2.12-2.12" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="3.25" />
     </svg>
   );
 }

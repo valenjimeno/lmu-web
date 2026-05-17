@@ -35,14 +35,19 @@ export function RangeField({
     : `${value.toFixed(decimals)}${valueSuffix}`;
 
   return (
-    <label className="block space-y-3" htmlFor={id}>
+    <label
+      className="block rounded-[1.1rem] border border-white/8 bg-white/[0.025] p-4"
+      htmlFor={id}
+    >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <span className="min-w-12 rounded-full border border-white/10 bg-white/6 px-3 py-1 text-center text-sm font-semibold text-foreground">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+          {label}
+        </span>
+        <span className="min-w-14 rounded-[0.8rem] border border-white/10 bg-white/[0.04] px-3 py-1 text-center text-sm font-semibold text-foreground">
           {displayValue}
         </span>
       </div>
-      <div className="relative px-1">
+      <div className="relative mt-4 px-1">
         <input
           id={id}
           name={name}
@@ -60,7 +65,7 @@ export function RangeField({
           }}
         />
       </div>
-      <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+      <div className="mt-3 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         <span>
           {min}
           {valueSuffix}

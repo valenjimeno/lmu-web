@@ -22,7 +22,7 @@ export function LoginForm({ errorMessage }: LoginFormProps) {
         <Input id="password" name="password" type="password" placeholder="••••••••" required />
       </div>
       {errorMessage ? (
-        <p className="rounded-[1.3rem] border border-[#ff6b5733] bg-[#ff6b5712] px-4 py-3 text-sm text-[#ffb7aa]">
+        <p className="rounded-[1.3rem] border border-[rgba(244,154,141,0.22)] bg-[rgba(244,154,141,0.08)] px-4 py-3 text-sm text-[#f3b4aa]">
           {errorMessage}
         </p>
       ) : null}

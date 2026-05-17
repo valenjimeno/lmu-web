@@ -26,9 +26,9 @@ type SetupMetricPillProps = {
 
 export function SetupBadge({ children, tone = 'default', className }: SetupBadgeProps) {
   const tones = {
-    default: 'border-white/10 bg-white/6 text-muted',
-    accent: 'border-[#ff9a4a33] bg-[#ff7a181a] text-[#ffd4af]',
-    success: 'border-[#7dd7a633] bg-[#7dd7a614] text-[#b8f2ca]',
+    default: 'border-white/10 bg-white/[0.04] text-[#c3cad4]',
+    accent: 'border-[rgba(215,170,109,0.2)] bg-[rgba(215,170,109,0.11)] text-[#f1d19d]',
+    success: 'border-[rgba(138,199,161,0.22)] bg-[rgba(138,199,161,0.12)] text-[#ccead5]',
   };
 
   return (
@@ -48,7 +48,7 @@ export function SetupEmblem({ label, value, className }: SetupEmblemProps) {
   return (
     <div
       className={cn(
-        'rounded-[1.35rem] border border-white/8 bg-black/25 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+        'rounded-[1.35rem] border border-white/8 bg-white/[0.035] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
         className,
       )}
     >
@@ -62,7 +62,7 @@ export function SetupMetricCard({ label, value, className }: SetupMetricCardProp
   return (
     <div
       className={cn(
-        'rounded-[1.35rem] border border-white/8 bg-white/4 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+        'rounded-[1.35rem] border border-white/8 bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
         className,
       )}
     >
@@ -76,7 +76,7 @@ export function SetupMetricPill({ label, value, className }: SetupMetricPillProp
   return (
     <div
       className={cn(
-        'rounded-[1.1rem] border border-white/8 bg-white/4 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+        'rounded-[1.1rem] border border-white/8 bg-white/[0.035] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
         className,
       )}
     >

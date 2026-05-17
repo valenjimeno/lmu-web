@@ -40,6 +40,7 @@ export type Database = {
           id: string;
           manufacturer_id: string;
           name: string;
+          season: string | null;
           slug: string;
           updated_at: string;
         };
@@ -50,6 +51,7 @@ export type Database = {
           id?: string;
           manufacturer_id: string;
           name: string;
+          season?: string | null;
           slug: string;
           updated_at?: string;
         };
@@ -60,6 +62,7 @@ export type Database = {
           id?: string;
           manufacturer_id?: string;
           name?: string;
+          season?: string | null;
           slug?: string;
           updated_at?: string;
         };
@@ -315,26 +318,35 @@ export type Database = {
       };
       tracks: {
         Row: {
+          city: string | null;
           country_code: string | null;
           created_at: string;
           id: string;
+          is_dlc: boolean;
           name: string;
+          official_name: string | null;
           slug: string;
           updated_at: string;
         };
         Insert: {
+          city?: string | null;
           country_code?: string | null;
           created_at?: string;
           id?: string;
+          is_dlc?: boolean;
           name: string;
+          official_name?: string | null;
           slug: string;
           updated_at?: string;
         };
         Update: {
+          city?: string | null;
           country_code?: string | null;
           created_at?: string;
           id?: string;
+          is_dlc?: boolean;
           name?: string;
+          official_name?: string | null;
           slug?: string;
           updated_at?: string;
         };

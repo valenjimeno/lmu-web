@@ -16,10 +16,10 @@ export function FavoriteToggleButton({ setupId, isFavorite, returnTo }: Favorite
         type="submit"
         aria-label={isFavorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
         title={isFavorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
-        className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
           isFavorite
-            ? 'border-[#ff9a4a55] bg-[#ff7a181f] text-[#ffb14f]'
-            : 'border-white/10 bg-white/4 text-muted hover:border-[#ff9a4a55] hover:text-[#ffb14f]'
+            ? 'border-[rgba(215,170,109,0.26)] bg-[rgba(215,170,109,0.12)] text-[#f1c487]'
+            : 'border-white/10 bg-white/[0.03] text-muted hover:border-[rgba(215,170,109,0.24)] hover:text-[#f1c487]'
         }`}
       >
         <svg

@@ -26,27 +26,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl items-center py-8">
-      <div className="app-shell-card w-full rounded-[2rem] p-8 sm:p-9">
-        <div className="mb-8 space-y-3">
-          <p className="section-kicker text-xs font-semibold">Acceso privado</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Inicia sesión</h1>
-          <p className="text-sm leading-7 text-muted">
-            Entra a tu garage personal para crear, filtrar y revisar setups con una experiencia
-            optimizada primero para móvil.
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center py-8">
+      <section className="panel-dark w-full max-w-xl rounded-[1.9rem] p-8 sm:p-10">
+        <div className="space-y-3">
+          <div className="logo-stack text-[1.5rem] text-white">
+            <div>LMU</div>
+            <div className="text-[1rem]">WEB</div>
+          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
+            Acceso privado
           </p>
+          <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+            Inicia sesión
+          </h1>
         </div>
-        <div className="mb-6 rounded-[1.5rem] border border-white/8 bg-black/20 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffbc7e]">
-            Apex-inspired flow
-          </p>
-          <p className="mt-2 text-sm text-muted">
-            Pantallas oscuras, bloques claros y acciones primarias muy visibles para sentirse como
-            una app nativa moderna.
-          </p>
+
+        <div className="mt-8 rounded-[1.4rem] border border-white/8 bg-white/[0.025] p-5 sm:p-6">
+          <LoginForm errorMessage={errorMessage} />
         </div>
-        <LoginForm errorMessage={errorMessage} />
-      </div>
+      </section>
     </main>
   );
 }

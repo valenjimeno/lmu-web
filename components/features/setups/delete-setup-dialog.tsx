@@ -8,9 +8,10 @@ import { Modal } from '@/components/ui/modal';
 type DeleteSetupDialogProps = {
   setupId: string;
   setupName: string;
+  returnTo?: string;
 };
 
-export function DeleteSetupDialog({ setupId, setupName }: DeleteSetupDialogProps) {
+export function DeleteSetupDialog({ setupId, setupName, returnTo }: DeleteSetupDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -73,6 +74,7 @@ export function DeleteSetupDialog({ setupId, setupName }: DeleteSetupDialogProps
 
             <form action={deleteSetupAction} className="mt-6 space-y-4">
               <input type="hidden" name="setupId" value={setupId} />
+              {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
               <input type="hidden" name="confirmDeleteText" value="ELIMINAR" />
               <input type="hidden" name="confirmDeleteCheckbox" value="on" />
 
