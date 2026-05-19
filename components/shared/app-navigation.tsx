@@ -2,10 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { routes } from '@/lib/constants/routes';
+import { appNavigationItems } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils/cn';
-
-const items = [{ href: routes.setups, label: 'Setups', icon: 'speed' }] as const;
 
 type AppNavigationProps = {
   orientation?: 'horizontal' | 'vertical';
@@ -26,7 +24,7 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
       )}
       aria-label="Navegacion privada"
     >
-      {items.map((item) => {
+      {appNavigationItems.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
@@ -50,7 +48,7 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
   );
 }
 
-function NavIcon({ type }: { type: 'speed' | 'settings' }) {
+function NavIcon({ type }: { type: 'speed' | 'compare' | 'settings' }) {
   const className = 'h-[18px] w-[18px] shrink-0';
 
   if (type === 'speed') {
@@ -66,6 +64,27 @@ function NavIcon({ type }: { type: 'speed' | 'settings' }) {
         <path d="M4 15a8 8 0 1 1 16 0" />
         <path d="M12 12l4.5-4.5" />
         <path d="M7 18h10" />
+      </svg>
+    );
+  }
+
+  if (type === 'compare') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M8 5v14" />
+        <path d="M16 5v14" />
+        <path d="M5 8h6" />
+        <path d="M13 16h6" />
+        <path d="M5 12h4" />
+        <path d="M15 12h4" />
       </svg>
     );
   }

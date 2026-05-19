@@ -1,9 +1,13 @@
-import Link from 'next/link';
-import { routes } from '@/lib/constants/routes';
+'use client';
 
-const mainItems = [{ label: 'Setups', href: routes.setups, active: true }];
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { appNavigationItems } from '@/lib/constants/routes';
+import { cn } from '@/lib/utils/cn';
 
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="panel-dark hidden w-[10.5rem] shrink-0 overflow-hidden rounded-[1.35rem] lg:flex lg:flex-col">
       <div className="flex h-full flex-col">
@@ -19,26 +23,30 @@ export function Sidebar() {
             Principal
           </p>
           <nav className="mt-3 space-y-1">
-            {mainItems.map((item) =>
-              item.href ? (
+            {appNavigationItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
                 <Link
-                  key={item.label}
+                  key={item.href}
                   href={item.href}
-                  className="flex items-center gap-3 rounded-md bg-[rgba(225,178,122,0.14)] px-3 py-3 text-sm font-medium text-white"
+                  className={cn(
+                    'flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition',
+                    isActive
+                      ? 'bg-[rgba(225,178,122,0.14)] text-white'
+                      : 'text-white/70 hover:bg-white/[0.04] hover:text-white',
+                  )}
                 >
-                  <span className="h-2 w-2 rounded-full bg-[#e1b27a]" />
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full border',
+                      isActive ? 'border-[#e1b27a] bg-[#e1b27a]' : 'border-white/30 bg-transparent',
+                    )}
+                  />
                   {item.label}
                 </Link>
-              ) : (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-3 rounded-md px-3 py-3 text-sm text-white/70"
-                >
-                  <span className="h-2 w-2 rounded-full border border-white/30" />
-                  {item.label}
-                </div>
-              ),
-            )}
+              );
+            })}
           </nav>
         </div>
       </div>

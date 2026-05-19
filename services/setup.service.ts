@@ -1,16 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSetupCatalog, type CarOption } from '@/services/catalog.service';
 import type { Database } from '@/types/database.types';
-
-type CarClassOption = Pick<
-  Database['public']['Tables']['car_classes']['Row'],
-  'id' | 'name' | 'slug'
->;
-type ManufacturerOption = Pick<Database['public']['Tables']['manufacturers']['Row'], 'id' | 'name'>;
-type CarOption = Pick<
-  Database['public']['Tables']['cars']['Row'],
-  'id' | 'name' | 'car_class_id' | 'manufacturer_id'
->;
-type TrackOption = Pick<Database['public']['Tables']['tracks']['Row'], 'id' | 'name'>;
 type ProfileOption = Pick<
   Database['public']['Tables']['profiles']['Row'],
   'display_name' | 'email'
@@ -27,6 +17,8 @@ type SetupRow = Pick<
   | 'created_at'
   | 'updated_at'
   | 'notes'
+  | 'race_duration_minutes'
+  | 'weather_summary'
   | 'brake_bias'
   | 'abs'
   | 'tc'
@@ -52,6 +44,8 @@ export type SetupSummary = {
   createdAt: string;
   updatedAt: string;
   notes: string | null;
+  raceDurationMinutes: number | null;
+  weatherSummary: string | null;
   brakeBias: number | null;
   abs: number | null;
   onboardTc: number | null;
@@ -69,10 +63,40 @@ export type SetupFilters = {
   favoriteOnly?: boolean;
 };
 
+export type SetupComparisonFilters = Pick<
+  SetupFilters,
+  'carClassId' | 'carId' | 'trackId' | 'setupType'
+>;
+
 type GetSetupPageDataOptions = {
   page?: number;
   pageSize?: number;
 };
+
+function resolveSetupCatalogFilters(
+  carClasses: Awaited<ReturnType<typeof getSetupCatalog>>['carClasses'],
+  cars: Awaited<ReturnType<typeof getSetupCatalog>>['cars'],
+  filters: Pick<SetupFilters, 'carClassId' | 'carId'>,
+) {
+  const defaultCarClassId =
+    carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
+  const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
+    ? filters.carClassId
+    : defaultCarClassId;
+  const carsForSelectedClass = selectedCarClassId
+    ? cars.filter((car) => car.car_class_id === selectedCarClassId)
+    : cars;
+  const carsForSelectedClassIds = new Set(carsForSelectedClass.map((car) => car.id));
+  const selectedCarId =
+    filters.carId && carsForSelectedClassIds.has(filters.carId) ? filters.carId : undefined;
+
+  return {
+    defaultCarClassId,
+    selectedCarClassId,
+    carsForSelectedClass,
+    selectedCarId,
+  };
+}
 
 function buildSetupSummary(
   setup: SetupRow,
@@ -103,6 +127,8 @@ function buildSetupSummary(
     createdAt: setup.created_at,
     updatedAt: setup.updated_at,
     notes: setup.notes,
+    raceDurationMinutes: setup.race_duration_minutes,
+    weatherSummary: setup.weather_summary,
     brakeBias: setup.brake_bias,
     abs: setup.abs,
     onboardTc: setup.tc,
@@ -118,50 +144,14 @@ export async function getSetupPageData(
   options: GetSetupPageDataOptions = {},
 ) {
   const supabase = await createClient();
+  const { carClasses, manufacturers, cars, tracks } = await getSetupCatalog();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.max(1, options.pageSize ?? 5);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const [carClassesResult, manufacturersResult, carsResult, tracksResult] = await Promise.all([
-    supabase.from('car_classes').select('id, name, slug').order('name'),
-    supabase.from('manufacturers').select('id, name').order('name'),
-    supabase.from('cars').select('id, name, car_class_id, manufacturer_id').order('name'),
-    supabase.from('tracks').select('id, name').order('name'),
-  ]);
-
-  if (carClassesResult.error) {
-    throw carClassesResult.error;
-  }
-
-  if (manufacturersResult.error) {
-    throw manufacturersResult.error;
-  }
-
-  if (carsResult.error) {
-    throw carsResult.error;
-  }
-
-  if (tracksResult.error) {
-    throw tracksResult.error;
-  }
-
-  const carClasses = (carClassesResult.data ?? []) as CarClassOption[];
-  const manufacturers = (manufacturersResult.data ?? []) as ManufacturerOption[];
-  const cars = (carsResult.data ?? []) as CarOption[];
-  const tracks = (tracksResult.data ?? []) as TrackOption[];
-
-  const defaultCarClassId =
-    carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
-  const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
-    ? filters.carClassId
-    : defaultCarClassId;
-  const carsForSelectedClass = selectedCarClassId
-    ? cars.filter((car) => car.car_class_id === selectedCarClassId)
-    : cars;
-  const carsForSelectedClassIds = new Set(carsForSelectedClass.map((car) => car.id));
-  const selectedCarId =
-    filters.carId && carsForSelectedClassIds.has(filters.carId) ? filters.carId : undefined;
+  const { defaultCarClassId, selectedCarClassId, carsForSelectedClass, selectedCarId } =
+    resolveSetupCatalogFilters(carClasses, cars, filters);
 
   const favoritesResult = await supabase
     .from('setup_favorites')
@@ -189,7 +179,7 @@ export async function getSetupPageData(
   let setupsQuery = supabase
     .from('setups')
     .select(
-      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       { count: 'exact' },
     )
     .eq('owner_user_id', userId);
@@ -306,27 +296,115 @@ export async function getSetupPageData(
   };
 }
 
+export async function getSetupComparisonData(userId: string, filters: SetupComparisonFilters = {}) {
+  const supabase = await createClient();
+  const { carClasses, manufacturers, cars, tracks } = await getSetupCatalog();
+  const { defaultCarClassId, selectedCarClassId, carsForSelectedClass, selectedCarId } =
+    resolveSetupCatalogFilters(carClasses, cars, filters);
+
+  const profileResult = await supabase
+    .from('profiles')
+    .select('display_name, email')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileResult.error) {
+    throw profileResult.error;
+  }
+
+  const profile = profileResult.data as ProfileOption | null;
+  const ownerDisplayName = profile?.display_name?.trim() || profile?.email?.trim() || 'Usuario';
+
+  let setupsQuery = supabase
+    .from('setups')
+    .select(
+      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+    )
+    .eq('owner_user_id', userId)
+    .not('best_lap_ms', 'is', null);
+
+  if (selectedCarClassId) {
+    const scopedCarIds = carsForSelectedClass.map((car) => car.id);
+
+    if (scopedCarIds.length === 0) {
+      return {
+        carClasses,
+        cars,
+        tracks,
+        defaultCarClassId,
+        resolvedFilters: {
+          ...filters,
+          carClassId: selectedCarClassId,
+          carId: undefined,
+        },
+        setups: [] as SetupSummary[],
+      };
+    }
+
+    setupsQuery = setupsQuery.in('car_id', scopedCarIds);
+  }
+
+  if (selectedCarId) {
+    setupsQuery = setupsQuery.eq('car_id', selectedCarId);
+  }
+
+  if (filters.trackId) {
+    setupsQuery = setupsQuery.eq('track_id', filters.trackId);
+  }
+
+  if (filters.setupType) {
+    setupsQuery = setupsQuery.eq('setup_type', filters.setupType);
+  }
+
+  const { data: setupsData, error: setupsError } = await setupsQuery
+    .order('best_lap_ms', { ascending: true, nullsFirst: false })
+    .order('updated_at', { ascending: false });
+
+  if (setupsError) {
+    throw setupsError;
+  }
+
+  const carClassesById = new Map(carClasses.map((carClass) => [carClass.id, carClass.name]));
+  const manufacturersById = new Map(
+    manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
+  );
+  const carsById = new Map(cars.map((car) => [car.id, car]));
+  const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
+
+  return {
+    carClasses,
+    cars,
+    tracks,
+    defaultCarClassId,
+    resolvedFilters: {
+      ...filters,
+      carClassId: selectedCarClassId,
+      carId: selectedCarId,
+    },
+    setups: ((setupsData ?? []) as SetupRow[]).map((setup) =>
+      buildSetupSummary(
+        setup,
+        carsById,
+        tracksById,
+        carClassesById,
+        manufacturersById,
+        new Set<string>(),
+        ownerDisplayName,
+      ),
+    ),
+  };
+}
+
 export async function getSetupDetail(userId: string, setupId: string) {
   const supabase = await createClient();
+  const { carClasses, manufacturers, cars, tracks } = await getSetupCatalog();
 
-  const [
-    carClassesResult,
-    manufacturersResult,
-    carsResult,
-    tracksResult,
-    profileResult,
-    setupResult,
-    favoriteResult,
-  ] = await Promise.all([
-    supabase.from('car_classes').select('id, name').order('name'),
-    supabase.from('manufacturers').select('id, name').order('name'),
-    supabase.from('cars').select('id, name, car_class_id, manufacturer_id').order('name'),
-    supabase.from('tracks').select('id, name').order('name'),
+  const [profileResult, setupResult, favoriteResult] = await Promise.all([
     supabase.from('profiles').select('display_name, email').eq('id', userId).maybeSingle(),
     supabase
       .from('setups')
       .select(
-        'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+        'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       )
       .eq('owner_user_id', userId)
       .eq('id', setupId)
@@ -337,22 +415,6 @@ export async function getSetupDetail(userId: string, setupId: string) {
       .eq('user_id', userId)
       .eq('setup_id', setupId),
   ]);
-
-  if (carClassesResult.error) {
-    throw carClassesResult.error;
-  }
-
-  if (manufacturersResult.error) {
-    throw manufacturersResult.error;
-  }
-
-  if (carsResult.error) {
-    throw carsResult.error;
-  }
-
-  if (tracksResult.error) {
-    throw tracksResult.error;
-  }
 
   if (profileResult.error) {
     throw profileResult.error;
@@ -370,10 +432,6 @@ export async function getSetupDetail(userId: string, setupId: string) {
     return null;
   }
 
-  const carClasses = (carClassesResult.data ?? []) as CarClassOption[];
-  const manufacturers = (manufacturersResult.data ?? []) as ManufacturerOption[];
-  const cars = (carsResult.data ?? []) as CarOption[];
-  const tracks = (tracksResult.data ?? []) as TrackOption[];
   const profile = (profileResult.data ?? null) as ProfileOption | null;
   const favorites = (favoriteResult.data ?? []) as SetupFavoriteRow[];
   const ownerDisplayName = profile?.display_name?.trim() || profile?.email?.trim() || 'Usuario';
@@ -404,6 +462,8 @@ type CreateSetupInput = {
   trackId: string;
   setupType: Database['public']['Enums']['setup_type'];
   notes?: string;
+  raceDurationMinutes?: number | null;
+  weatherSummary?: string | null;
   brakeBias?: number | null;
   abs?: number | null;
   onboardTc?: number | null;
@@ -420,6 +480,8 @@ type UpdateSetupInput = {
   trackId: string;
   setupType: Database['public']['Enums']['setup_type'];
   notes?: string;
+  raceDurationMinutes?: number | null;
+  weatherSummary?: string | null;
   brakeBias?: number | null;
   abs?: number | null;
   onboardTc?: number | null;
@@ -436,25 +498,33 @@ type DeleteSetupInput = {
 export async function createSetup(input: CreateSetupInput) {
   const supabase = await createClient();
 
-  const { error } = await supabase.from('setups').insert({
-    owner_user_id: input.ownerUserId,
-    car_id: input.carId,
-    track_id: input.trackId,
-    name: input.name,
-    setup_type: input.setupType,
-    notes: input.notes ? input.notes : null,
-    brake_bias: input.brakeBias ?? null,
-    abs: input.abs ?? null,
-    tc: input.onboardTc ?? null,
-    tc_power_cut: input.tcPowerCut ?? null,
-    tc_slip_angle: input.tcSlipAngle ?? null,
-    best_lap_ms: input.bestLapMs ?? null,
-    visibility: 'private',
-  });
+  const { data, error } = await supabase
+    .from('setups')
+    .insert({
+      owner_user_id: input.ownerUserId,
+      car_id: input.carId,
+      track_id: input.trackId,
+      name: input.name,
+      setup_type: input.setupType,
+      notes: input.notes ? input.notes : null,
+      race_duration_minutes: input.raceDurationMinutes ?? null,
+      weather_summary: input.weatherSummary ? input.weatherSummary : null,
+      brake_bias: input.brakeBias ?? null,
+      abs: input.abs ?? null,
+      tc: input.onboardTc ?? null,
+      tc_power_cut: input.tcPowerCut ?? null,
+      tc_slip_angle: input.tcSlipAngle ?? null,
+      best_lap_ms: input.bestLapMs ?? null,
+      visibility: 'private',
+    })
+    .select('id')
+    .single();
 
   if (error) {
     throw error;
   }
+
+  return data.id;
 }
 
 export async function updateSetup(input: UpdateSetupInput) {
@@ -468,6 +538,8 @@ export async function updateSetup(input: UpdateSetupInput) {
       track_id: input.trackId,
       setup_type: input.setupType,
       notes: input.notes ? input.notes : null,
+      race_duration_minutes: input.raceDurationMinutes ?? null,
+      weather_summary: input.weatherSummary ? input.weatherSummary : null,
       brake_bias: input.brakeBias ?? null,
       abs: input.abs ?? null,
       tc: input.onboardTc ?? null,

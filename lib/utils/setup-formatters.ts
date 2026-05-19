@@ -29,3 +29,24 @@ export function formatLapTime(value: number | null) {
 
   return `${minutes}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
 }
+
+export function formatRaceDurationMinutes(value: number | null) {
+  if (value === null) {
+    return 'No definido';
+  }
+
+  return `${value} min`;
+}
+
+export function formatWeatherSummary(value: string | null) {
+  switch (value) {
+    case 'sun':
+      return 'Sol';
+    case 'sun-cloud':
+      return 'Sol y nube';
+    case 'rain':
+      return 'Lluvia';
+    default:
+      return 'No definido';
+  }
+}

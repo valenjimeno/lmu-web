@@ -6,11 +6,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { CreateSetupModal, EditSetupModal } from '@/components/features/setups/create-setup-modal';
 import { FavoriteToggleButton } from '@/components/features/setups/favorite-toggle-button';
+import { SetupBadge } from '@/components/features/setups/setup-ui';
+import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
 import {
   formatBrakeBiasSplit,
   formatDate,
   formatLapTime,
   formatMetricValue,
+  formatRaceDurationMinutes,
+  formatWeatherSummary,
 } from '@/lib/utils/setup-formatters';
 import type { SetupSummary } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
@@ -22,6 +27,13 @@ type Option = {
 
 type CarOption = Option & {
   carClassId: string;
+};
+
+type ComparisonMetric = {
+  key: string;
+  label: string;
+  values: Record<string, string>;
+  preferredSetupId?: string;
 };
 
 type SetupsConsoleProps = {
@@ -60,9 +72,15 @@ export function SetupsConsole({
 }: SetupsConsoleProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [dismissedFeedbackMessage, setDismissedFeedbackMessage] = useState<string | undefined>(
+    undefined,
+  );
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(setups[0]?.id ?? null);
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [comparisonSelectionIds, setComparisonSelectionIds] = useState<string[]>([]);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const [mobileCarClassId, setMobileCarClassId] = useState(
     filters.carClassId ?? defaultCarClassId ?? '',
   );
@@ -79,6 +97,21 @@ export function SetupsConsole({
   const selectedSetup = useMemo(
     () => setups.find((setup) => setup.id === selectedSetupId) ?? setups[0] ?? null,
     [selectedSetupId, setups],
+  );
+  const normalizedComparisonSelectionIds = useMemo(
+    () => normalizeComparisonSelection(comparisonSelectionIds, setups),
+    [comparisonSelectionIds, setups],
+  );
+  const selectedComparisonSetups = useMemo(
+    () =>
+      normalizedComparisonSelectionIds
+        .map((setupId) => setups.find((setup) => setup.id === setupId) ?? null)
+        .filter(Boolean) as SetupSummary[],
+    [normalizedComparisonSelectionIds, setups],
+  );
+  const comparisonMetrics = useMemo(
+    () => buildComparisonMetrics(selectedComparisonSetups),
+    [selectedComparisonSetups],
   );
 
   const activeFilters = useMemo(
@@ -109,6 +142,18 @@ export function SetupsConsole({
   );
 
   useEffect(() => {
+    if (!feedbackMessage) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDismissedFeedbackMessage(feedbackMessage);
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [feedbackMessage]);
+
+  useEffect(() => {
     if (!mobileInsightsOpen) {
       return undefined;
     }
@@ -124,6 +169,8 @@ export function SetupsConsole({
   }, [mobileInsightsOpen]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const visibleFeedbackMessage =
+    feedbackMessage && dismissedFeedbackMessage !== feedbackMessage ? feedbackMessage : undefined;
 
   function buildSetupsPageHref(nextPage: number, nextFilters: typeof filters = filters) {
     const params = new URLSearchParams();
@@ -180,13 +227,66 @@ export function SetupsConsole({
     }
   }
 
+  function toggleComparisonSetup(setupId: string) {
+    setComparisonError(null);
+    setComparisonSelectionIds((currentSelection) => {
+      const normalizedSelection = normalizeComparisonSelection(currentSelection, setups);
+
+      if (normalizedSelection.includes(setupId)) {
+        return normalizedSelection.filter((id) => id !== setupId);
+      }
+
+      if (normalizedSelection.length >= 3) {
+        setComparisonError('Solo puedes comparar un máximo de 3 setups al mismo tiempo.');
+        return normalizedSelection;
+      }
+
+      return [...normalizedSelection, setupId];
+    });
+  }
+
+  function handleCompare() {
+    if (selectedComparisonSetups.length < 2) {
+      return;
+    }
+
+    const firstSetup = selectedComparisonSetups[0];
+    const sameScope = selectedComparisonSetups.every(
+      (setup) => setup.carId === firstSetup.carId && setup.trackId === firstSetup.trackId,
+    );
+
+    if (!sameScope) {
+      setComparisonModalOpen(false);
+      setComparisonError('Selecciona setups del mismo coche y circuito para compararlos.');
+      return;
+    }
+
+    const everySetupHasLapTime = selectedComparisonSetups.every(
+      (setup) => setup.bestLapMs !== null,
+    );
+
+    if (!everySetupHasLapTime) {
+      setComparisonModalOpen(false);
+      setComparisonError('Todos los setups comparados deben tener un tiempo guardado.');
+      return;
+    }
+
+    setComparisonError(null);
+    setComparisonModalOpen(true);
+  }
+
   return (
     <section className="space-y-4">
-      {feedbackMessage ? (
+      {visibleFeedbackMessage ? (
         <div
           className={`rounded-[1rem] border border-white/8 bg-white/[0.04] px-4 py-3 text-sm ${feedbackTone ?? ''}`}
         >
-          {feedbackMessage}
+          {visibleFeedbackMessage}
+        </div>
+      ) : null}
+      {comparisonError ? (
+        <div className="rounded-[1rem] border border-[rgba(242,162,148,0.22)] bg-[rgba(242,162,148,0.08)] px-4 py-3 text-sm text-[#f3b4aa]">
+          {comparisonError}
         </div>
       ) : null}
 
@@ -197,7 +297,29 @@ export function SetupsConsole({
               <h2 className="text-[1.9rem] font-medium text-white">Biblioteca</h2>
               <span className="text-sm text-muted">{totalCount} setups</span>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={handleCompare}
+                disabled={selectedComparisonSetups.length < 2}
+                className={`min-h-10 gap-2 rounded-md px-4 shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 ${
+                  selectedComparisonSetups.length >= 2
+                    ? 'border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] text-white hover:bg-[rgba(225,178,122,0.26)]'
+                    : 'border-white/8 bg-white/[0.03] text-white/38 opacity-70'
+                }`}
+              >
+                Comparar
+                <SetupBadge
+                  tone="default"
+                  className={
+                    selectedComparisonSetups.length >= 2
+                      ? 'border-white/16 bg-black/10 px-2 py-0.5 text-[10px] text-white'
+                      : 'border-white/8 bg-transparent px-2 py-0.5 text-[10px] text-white/40'
+                  }
+                >
+                  {selectedComparisonSetups.length}/3
+                </SetupBadge>
+              </Button>
               <CreateSetupModal
                 carClasses={carClasses}
                 cars={cars}
@@ -475,7 +597,8 @@ export function SetupsConsole({
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-[minmax(0,2.2fr)_1.45fr_1.25fr_0.9fr_1.15fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+              <div className="hidden grid-cols-[auto_minmax(0,2.2fr)_1.45fr_1.25fr_0.9fr_1.15fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+                <span>Comparar</span>
                 <span>Nombre</span>
                 <span>Coche</span>
                 <span>Circuito</span>
@@ -491,10 +614,21 @@ export function SetupsConsole({
                     <article
                       key={setup.id}
                       onClick={() => handleSetupSelect(setup.id)}
-                      className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 transition lg:grid-cols-[minmax(0,2.2fr)_1.45fr_1.25fr_0.9fr_1.15fr] lg:items-center lg:gap-4 lg:py-4 ${
+                      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 px-4 py-3 transition lg:grid-cols-[auto_minmax(0,2.2fr)_1.45fr_1.25fr_0.9fr_1.15fr] lg:items-center lg:gap-4 lg:py-4 ${
                         isSelected ? 'bg-white/[0.045]' : 'hover:bg-white/[0.03]'
                       }`}
                     >
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={normalizedComparisonSelectionIds.includes(setup.id)}
+                          onChange={() => toggleComparisonSetup(setup.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Comparar setup ${setup.name}`}
+                          className="h-4 w-4 rounded border-white/20 bg-transparent accent-[#e1b27a]"
+                        />
+                      </div>
+
                       <div className="flex min-w-0 items-center gap-3 lg:min-w-0">
                         <div className="hidden lg:flex lg:justify-end">
                           <FavoriteToggleButton
@@ -518,7 +652,7 @@ export function SetupsConsole({
                         />
                       </div>
 
-                      <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 lg:contents">
+                      <div className="col-span-3 grid grid-cols-2 gap-x-4 gap-y-3 lg:contents">
                         <DataLine label="Coche" value={setup.carName} muted="" />
                         <DataLine label="Circuito" value={setup.trackName} muted="" />
                         <DataLine
@@ -622,6 +756,14 @@ export function SetupsConsole({
             document.body,
           )
         : null}
+
+      {comparisonModalOpen ? (
+        <ComparisonModal
+          setups={selectedComparisonSetups}
+          metrics={comparisonMetrics}
+          onClose={() => setComparisonModalOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -698,6 +840,26 @@ function InsightsPanel({
                 </span>
                 <span className="truncate text-right text-white/72">{setup.trackName}</span>
               </div>
+              {setup.weatherSummary ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    CLIMA
+                  </span>
+                  <span className="truncate text-right text-white/72">
+                    {formatWeatherSummary(setup.weatherSummary)}
+                  </span>
+                </div>
+              ) : null}
+              {setup.raceDurationMinutes !== null ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    DURACION
+                  </span>
+                  <span className="truncate text-right text-white/72">
+                    {formatRaceDurationMinutes(setup.raceDurationMinutes)}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -800,4 +962,227 @@ function MetricLine({ label, value }: { label: string; value: string }) {
       <span className="text-sm font-medium text-white">{value}</span>
     </div>
   );
+}
+
+function ComparisonModal({
+  setups,
+  metrics,
+  onClose,
+}: {
+  setups: SetupSummary[];
+  metrics: ComparisonMetric[];
+  onClose: () => void;
+}) {
+  const winningSetupId = [...setups]
+    .filter((setup) => setup.bestLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.bestLapMs ?? Number.MAX_SAFE_INTEGER) - (right.bestLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0]?.id;
+  const winningSetup = setups.find((setup) => setup.id === winningSetupId) ?? setups[0] ?? null;
+
+  return (
+    <Modal title="Comparativa de setups" className="max-w-2xl xl:max-w-4xl">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-white/62">
+            Comparando {setups.length} setups del mismo coche y circuito.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="self-start rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/62 transition hover:border-white/18 hover:text-white"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {winningSetup ? (
+            <section className="rounded-[1.1rem] border border-[rgba(143,197,164,0.28)] bg-[rgba(143,197,164,0.08)] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-white">{winningSetup.name}</p>
+                  <p className="mt-1 text-xs text-white/52">
+                    {winningSetup.setupType === 'fixed' ? 'Fixed' : 'Open'} •{' '}
+                    {formatDate(winningSetup.updatedAt)}
+                  </p>
+                </div>
+                <SetupBadge tone="success">Mejor vuelta</SetupBadge>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {metrics.map((metric) => (
+                  <div
+                    key={`${winningSetup.id}-${metric.key}`}
+                    className={`flex items-center justify-between gap-3 rounded-[0.9rem] border px-3 py-3 ${
+                      metric.preferredSetupId === winningSetup.id
+                        ? 'border-[rgba(143,197,164,0.3)] bg-[rgba(143,197,164,0.12)]'
+                        : 'border-white/8 bg-white/[0.02]'
+                    }`}
+                  >
+                    <span className="text-sm text-white/60">{metric.label}</span>
+                    <span className="max-w-[55%] text-right text-sm font-semibold text-white">
+                      {metric.values[winningSetup.id]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr className="text-left">
+                <th className="hairline-divider border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Métrica
+                </th>
+                {setups.map((setup) => (
+                  <th key={setup.id} className="hairline-divider border-b px-4 py-3 text-left">
+                    <div
+                      className={`min-w-[12rem] rounded-[1rem] border px-3 py-3 transition ${
+                        setup.id === winningSetupId
+                          ? 'border-[rgba(143,197,164,0.26)] bg-[rgba(143,197,164,0.08)]'
+                          : 'border-transparent opacity-55'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-white">{setup.name}</p>
+                      <p className="mt-1 text-xs text-white/52">
+                        {setup.setupType === 'fixed' ? 'Fixed' : 'Open'} •{' '}
+                        {formatDate(setup.updatedAt)}
+                      </p>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((metric) => (
+                <tr key={metric.key}>
+                  <th className="hairline-divider border-b px-4 py-3 text-left text-sm font-medium text-white/62">
+                    {metric.label}
+                  </th>
+                  {setups.map((setup) => {
+                    const isPreferred = metric.preferredSetupId === setup.id;
+                    const isWinnerColumn = setup.id === winningSetupId;
+
+                    return (
+                      <td
+                        key={`${metric.key}-${setup.id}`}
+                        className="hairline-divider border-b px-4 py-3"
+                      >
+                        <div
+                          className={`rounded-[0.95rem] border px-3 py-3 ${
+                            isPreferred
+                              ? 'border-[rgba(143,197,164,0.3)] bg-[rgba(143,197,164,0.12)]'
+                              : isWinnerColumn
+                                ? 'border-[rgba(255,255,255,0.12)] bg-white/[0.045]'
+                                : 'border-white/8 bg-white/[0.025] opacity-55'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-white">
+                            {metric.values[setup.id]}
+                          </p>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function normalizeComparisonSelection(selection: string[], setups: SetupSummary[]) {
+  const availableIds = new Set(setups.map((setup) => setup.id));
+  return selection.filter((setupId) => availableIds.has(setupId)).slice(0, 3);
+}
+
+function buildComparisonMetrics(selectedSetups: SetupSummary[]): ComparisonMetric[] {
+  if (selectedSetups.length === 0) {
+    return [];
+  }
+
+  const fastestSetup = [...selectedSetups]
+    .filter((setup) => setup.bestLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.bestLapMs ?? Number.MAX_SAFE_INTEGER) - (right.bestLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+
+  return [
+    {
+      key: 'lap',
+      label: 'Mejor vuelta',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatLapTime(setup.bestLapMs)]),
+      ),
+      preferredSetupId: fastestSetup?.id,
+    },
+    {
+      key: 'brake-bias',
+      label: 'Brake Bias',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatBrakeBiasSplit(setup.brakeBias)]),
+      ),
+    },
+    {
+      key: 'abs',
+      label: 'ABS',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatMetricValue(setup.abs)]),
+      ),
+    },
+    {
+      key: 'tc',
+      label: 'Onboard TC',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatMetricValue(setup.onboardTc)]),
+      ),
+    },
+    {
+      key: 'tc-power',
+      label: 'TC Power Cut',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatMetricValue(setup.tcPowerCut)]),
+      ),
+    },
+    {
+      key: 'tc-slip',
+      label: 'TC Slip Angle',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatMetricValue(setup.tcSlipAngle)]),
+      ),
+    },
+    {
+      key: 'weather',
+      label: 'Clima',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatWeatherSummary(setup.weatherSummary)]),
+      ),
+    },
+    {
+      key: 'duration',
+      label: 'Duración',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [
+          setup.id,
+          formatRaceDurationMinutes(setup.raceDurationMinutes),
+        ]),
+      ),
+    },
+    {
+      key: 'updated',
+      label: 'Actualización',
+      values: Object.fromEntries(
+        selectedSetups.map((setup) => [setup.id, formatDate(setup.updatedAt)]),
+      ),
+    },
+  ];
 }

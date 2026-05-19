@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/features/auth/login-form';
 import { routes } from '@/lib/constants/routes';
@@ -14,7 +15,15 @@ const errorMessages: Record<string, string> = {
   missing_credentials: 'Necesitamos email y password para iniciar sesión.',
 };
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  return (
+    <Suspense fallback={<LoginPageSkeleton />}>
+      <LoginPageContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function LoginPageContent({ searchParams }: LoginPageProps) {
   const [user, resolvedSearchParams] = await Promise.all([getCurrentUser(), searchParams]);
 
   if (user) {
@@ -43,6 +52,28 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <div className="mt-8 rounded-[1.4rem] border border-white/8 bg-white/[0.025] p-5 sm:p-6">
           <LoginForm errorMessage={errorMessage} />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function LoginPageSkeleton() {
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center py-8">
+      <section className="panel-dark w-full max-w-xl rounded-[1.9rem] p-8 sm:p-10">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 w-24 rounded bg-white/10" />
+          <div className="h-3 w-28 rounded bg-white/10" />
+          <div className="h-12 w-56 rounded bg-white/10" />
+        </div>
+
+        <div className="mt-8 rounded-[1.4rem] border border-white/8 bg-white/[0.025] p-5 sm:p-6">
+          <div className="space-y-4">
+            <div className="h-11 rounded-[0.95rem] bg-white/10" />
+            <div className="h-11 rounded-[0.95rem] bg-white/10" />
+            <div className="h-11 rounded-[0.95rem] bg-white/10" />
+          </div>
         </div>
       </section>
     </main>

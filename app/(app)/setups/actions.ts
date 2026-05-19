@@ -13,6 +13,7 @@ import {
 import type { Database } from '@/types/database.types';
 
 const allowedSetupTypes = new Set<Database['public']['Enums']['setup_type']>(['fixed', 'open']);
+const allowedWeatherSummaries = new Set(['sun', 'sun-cloud', 'rain']);
 
 function parseNullableNumber(value: FormDataEntryValue | null) {
   const normalized = String(value ?? '').trim();
@@ -24,6 +25,22 @@ function parseNullableNumber(value: FormDataEntryValue | null) {
   const parsed = Number(normalized);
 
   if (!Number.isFinite(parsed) || parsed < 0) {
+    return 'invalid';
+  }
+
+  return parsed;
+}
+
+function parseNullablePositiveInteger(value: FormDataEntryValue | null) {
+  const normalized = String(value ?? '').trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     return 'invalid';
   }
 
@@ -62,6 +79,8 @@ export async function createSetupAction(formData: FormData) {
   const trackId = String(formData.get('trackId') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
+  const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
   const abs = parseNullableNumber(formData.get('abs'));
   const onboardTc = parseNullableNumber(formData.get('onboardTc'));
@@ -73,7 +92,12 @@ export async function createSetupAction(formData: FormData) {
     redirect(`${routes.setups}?error=invalid_setup`);
   }
 
+  if (!allowedWeatherSummaries.has(rawWeatherSummary)) {
+    redirect(`${routes.setups}?error=invalid_setup`);
+  }
+
   if (
+    raceDurationMinutes === 'invalid' ||
     brakeBias === 'invalid' ||
     abs === 'invalid' ||
     onboardTc === 'invalid' ||
@@ -92,6 +116,8 @@ export async function createSetupAction(formData: FormData) {
       trackId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
       notes,
+      raceDurationMinutes,
+      weatherSummary: rawWeatherSummary,
       brakeBias,
       abs,
       onboardTc,
@@ -121,6 +147,8 @@ export async function updateSetupAction(formData: FormData) {
   const trackId = String(formData.get('trackId') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
+  const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
   const abs = parseNullableNumber(formData.get('abs'));
   const onboardTc = parseNullableNumber(formData.get('onboardTc'));
@@ -133,12 +161,14 @@ export async function updateSetupAction(formData: FormData) {
     !name ||
     !carId ||
     !trackId ||
-    !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open')
+    !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open') ||
+    !allowedWeatherSummaries.has(rawWeatherSummary)
   ) {
     redirect(`${routes.setups}/${setupId}?error=invalid_setup`);
   }
 
   if (
+    raceDurationMinutes === 'invalid' ||
     brakeBias === 'invalid' ||
     abs === 'invalid' ||
     onboardTc === 'invalid' ||
@@ -158,6 +188,8 @@ export async function updateSetupAction(formData: FormData) {
       trackId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
       notes,
+      raceDurationMinutes,
+      weatherSummary: rawWeatherSummary,
       brakeBias,
       abs,
       onboardTc,
@@ -175,6 +207,97 @@ export async function updateSetupAction(formData: FormData) {
     returnTo && returnTo.startsWith(routes.setups)
       ? `${returnTo}?saved=1`
       : `${routes.setups}/${setupId}?saved=1`,
+  );
+}
+
+export async function duplicateSetupAction(formData: FormData) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(routes.login);
+  }
+
+  const name = String(formData.get('name') ?? '').trim();
+  const carId = String(formData.get('carId') ?? '').trim();
+  const trackId = String(formData.get('trackId') ?? '').trim();
+  const notes = String(formData.get('notes') ?? '').trim();
+  const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
+  const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
+  const brakeBias = parseNullableNumber(formData.get('brakeBias'));
+  const abs = parseNullableNumber(formData.get('abs'));
+  const onboardTc = parseNullableNumber(formData.get('onboardTc'));
+  const tcPowerCut = parseNullableNumber(formData.get('tcPowerCut'));
+  const tcSlipAngle = parseNullableNumber(formData.get('tcSlipAngle'));
+  const bestLapMs = parseNullableLapTime(formData.get('bestLap'));
+  const sourceSetupId = String(formData.get('sourceSetupId') ?? '').trim();
+  const returnTo = String(formData.get('returnTo') ?? '').trim();
+
+  if (
+    !sourceSetupId ||
+    !name ||
+    !carId ||
+    !trackId ||
+    !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open') ||
+    !allowedWeatherSummaries.has(rawWeatherSummary)
+  ) {
+    redirect(
+      returnTo && returnTo.startsWith(routes.setups)
+        ? `${returnTo}?error=invalid_setup`
+        : `${routes.setups}?error=invalid_setup`,
+    );
+  }
+
+  if (
+    raceDurationMinutes === 'invalid' ||
+    brakeBias === 'invalid' ||
+    abs === 'invalid' ||
+    onboardTc === 'invalid' ||
+    tcPowerCut === 'invalid' ||
+    tcSlipAngle === 'invalid' ||
+    bestLapMs === 'invalid'
+  ) {
+    redirect(
+      returnTo && returnTo.startsWith(routes.setups)
+        ? `${returnTo}?error=invalid_setup_values`
+        : `${routes.setups}?error=invalid_setup_values`,
+    );
+  }
+
+  let duplicatedSetupId = '';
+
+  try {
+    duplicatedSetupId = await createSetup({
+      ownerUserId: user.id,
+      name,
+      carId,
+      trackId,
+      setupType: rawSetupType as Database['public']['Enums']['setup_type'],
+      notes,
+      raceDurationMinutes,
+      weatherSummary: rawWeatherSummary,
+      brakeBias,
+      abs,
+      onboardTc,
+      tcPowerCut,
+      tcSlipAngle,
+      bestLapMs,
+    });
+  } catch {
+    redirect(
+      returnTo && returnTo.startsWith(routes.setups)
+        ? `${returnTo}?error=duplicate_failed`
+        : `${routes.setups}?error=duplicate_failed`,
+    );
+  }
+
+  revalidatePath(routes.setups);
+  revalidatePath(`${routes.setups}/${sourceSetupId}`);
+  revalidatePath(`${routes.setups}/${duplicatedSetupId}`);
+  redirect(
+    returnTo && returnTo.startsWith(routes.setups)
+      ? `${returnTo}?duplicated=1`
+      : `${routes.setups}?duplicated=1`,
   );
 }
 

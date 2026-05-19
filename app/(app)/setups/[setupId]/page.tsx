@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
-import { updateSetupAction } from '@/app/(app)/setups/actions';
+import { duplicateSetupAction, updateSetupAction } from '@/app/(app)/setups/actions';
 import { DeleteSetupDialog } from '@/components/features/setups/delete-setup-dialog';
 import { FavoriteToggleButton } from '@/components/features/setups/favorite-toggle-button';
 import { RangeField } from '@/components/features/setups/range-field';
@@ -20,6 +21,7 @@ import {
 } from '@/lib/utils/setup-formatters';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { getSetupDetail } from '@/services/setup.service';
+import LoadingSetupDetail from './loading';
 
 type SetupDetailPageProps = {
   params: Promise<{
@@ -27,6 +29,8 @@ type SetupDetailPageProps = {
   }>;
   searchParams: Promise<{
     edit?: string;
+    duplicate?: string;
+    duplicated?: string;
     saved?: string;
     error?: string;
   }>;
@@ -42,12 +46,21 @@ const errorMessages: Record<string, string> = {
   invalid_setup: 'Necesitamos un nombre valido y un tipo correcto para guardar el setup.',
   invalid_setup_values: 'Brake Bias, ABS y los controles de traccion deben ser numeros validos.',
   update_failed: 'No hemos podido guardar los cambios. Intentalo de nuevo en unos segundos.',
+  duplicate_failed: 'No hemos podido crear la copia. Intentalo de nuevo en unos segundos.',
   delete_confirmation_required:
     'Para borrar el setup tienes que marcar la confirmacion y escribir ELIMINAR.',
   delete_failed: 'No hemos podido borrar el setup. Intentalo de nuevo en unos segundos.',
 };
 
-export default async function SetupDetailPage({ params, searchParams }: SetupDetailPageProps) {
+export default function SetupDetailPage({ params, searchParams }: SetupDetailPageProps) {
+  return (
+    <Suspense fallback={<LoadingSetupDetail />}>
+      <SetupDetailContent params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps) {
   const [user, resolvedParams, resolvedSearchParams] = await Promise.all([
     getCurrentUser(),
     params,
@@ -64,13 +77,16 @@ export default async function SetupDetailPage({ params, searchParams }: SetupDet
     notFound();
   }
 
-  const isEditMode = resolvedSearchParams.edit === '1';
+  const isDuplicateMode = resolvedSearchParams.duplicate === '1';
+  const isEditMode = resolvedSearchParams.edit === '1' || isDuplicateMode;
 
-  const feedbackMessage = resolvedSearchParams.saved
-    ? 'Cambios guardados correctamente. La fecha de modificacion se ha actualizado.'
-    : resolvedSearchParams.error
-      ? (errorMessages[resolvedSearchParams.error] ?? 'Ha ocurrido un error inesperado.')
-      : undefined;
+  const feedbackMessage = resolvedSearchParams.duplicated
+    ? 'Copia creada correctamente. Ya puedes seguir afinando este setup sin tocar el original.'
+    : resolvedSearchParams.saved
+      ? 'Cambios guardados correctamente. La fecha de modificacion se ha actualizado.'
+      : resolvedSearchParams.error
+        ? (errorMessages[resolvedSearchParams.error] ?? 'Ha ocurrido un error inesperado.')
+        : undefined;
 
   const feedbackTone = resolvedSearchParams.error ? 'text-[#f3b4aa]' : 'text-[#edd1a3]';
   const detailPath = `${routes.setups}/${setup.id}`;
@@ -120,7 +136,7 @@ export default async function SetupDetailPage({ params, searchParams }: SetupDet
           <div className="flex flex-col gap-2 sm:flex-row">
             {isEditMode ? (
               <Button href={detailPath} asChild variant="secondary">
-                Cancelar edición
+                {isDuplicateMode ? 'Cancelar duplicado' : 'Cancelar edición'}
               </Button>
             ) : (
               <Button href={`${detailPath}?edit=1`} asChild>
@@ -145,27 +161,41 @@ export default async function SetupDetailPage({ params, searchParams }: SetupDet
           ) : null}
 
           {isEditMode ? (
-            <form action={updateSetupAction} className="space-y-6">
+            <form
+              action={isDuplicateMode ? duplicateSetupAction : updateSetupAction}
+              className="space-y-6"
+            >
               <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-                <input type="hidden" name="setupId" value={setup.id} />
+                {isDuplicateMode ? (
+                  <input type="hidden" name="sourceSetupId" value={setup.id} />
+                ) : (
+                  <input type="hidden" name="setupId" value={setup.id} />
+                )}
                 <input type="hidden" name="carId" value={setup.carId} />
                 <input type="hidden" name="trackId" value={setup.trackId} />
+                <input
+                  type="hidden"
+                  name="raceDurationMinutes"
+                  value={setup.raceDurationMinutes ?? ''}
+                />
+                <input type="hidden" name="weatherSummary" value={setup.weatherSummary ?? 'sun'} />
 
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
-                      Edición
+                      {isDuplicateMode ? 'Duplicado' : 'Edición'}
                     </p>
                     <h3 className="text-2xl font-semibold tracking-tight text-white">
-                      Resumen del setup
+                      {isDuplicateMode ? 'Crear copia del setup' : 'Resumen del setup'}
                     </h3>
                     <p className="max-w-2xl text-sm leading-7 text-muted">
-                      Ajusta el nombre, el tipo y el contexto general antes de entrar a los
-                      controles del coche.
+                      {isDuplicateMode
+                        ? 'Partimos de este setup como base. Ajusta lo que necesites y solo guardaremos un setup nuevo cuando confirmes la copia.'
+                        : 'Ajusta el nombre, el tipo y el contexto general antes de entrar a los controles del coche.'}
                     </p>
                   </div>
                   <Button type="submit" className="w-full sm:w-auto">
-                    Guardar cambios
+                    {isDuplicateMode ? 'Guardar copia' : 'Guardar cambios'}
                   </Button>
                 </div>
 
@@ -176,7 +206,7 @@ export default async function SetupDetailPage({ params, searchParams }: SetupDet
                       <input
                         name="name"
                         required
-                        defaultValue={setup.name}
+                        defaultValue={isDuplicateMode ? `${setup.name} (copia)` : setup.name}
                         className={selectClassName}
                       />
                     </label>
@@ -369,10 +399,30 @@ export default async function SetupDetailPage({ params, searchParams }: SetupDet
                   Ver detalle
                 </Button>
               ) : (
-                <Button href={`${detailPath}?edit=1`} asChild className="w-full">
-                  Editar setup
-                </Button>
+                <>
+                  <Button href={`${detailPath}?edit=1`} asChild className="w-full">
+                    Editar setup
+                  </Button>
+                  <Button
+                    href={`${detailPath}?duplicate=1`}
+                    asChild
+                    variant="secondary"
+                    className="w-full"
+                  >
+                    Duplicar setup
+                  </Button>
+                </>
               )}
+              {isEditMode && !isDuplicateMode ? (
+                <Button
+                  href={`${detailPath}?duplicate=1`}
+                  asChild
+                  variant="secondary"
+                  className="w-full"
+                >
+                  Duplicar setup
+                </Button>
+              ) : null}
               <Button href={routes.setups} asChild variant="secondary" className="w-full">
                 Volver a todos los setups
               </Button>
