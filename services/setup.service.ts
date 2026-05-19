@@ -73,6 +73,15 @@ type GetSetupPageDataOptions = {
   pageSize?: number;
 };
 
+function buildSetupSearchQuery(query: string) {
+  return query
+    .trim()
+    .split(/\s+/)
+    .map((term) => term.replaceAll(/[':&|!()<>*]/g, ' ').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function resolveSetupCatalogFilters(
   carClasses: Awaited<ReturnType<typeof getSetupCatalog>>['carClasses'],
   cars: Awaited<ReturnType<typeof getSetupCatalog>>['cars'],
@@ -153,15 +162,10 @@ export async function getSetupPageData(
   const { defaultCarClassId, selectedCarClassId, carsForSelectedClass, selectedCarId } =
     resolveSetupCatalogFilters(carClasses, cars, filters);
 
-  const favoritesResult = await supabase
-    .from('setup_favorites')
-    .select('setup_id')
-    .eq('user_id', userId);
-  const profileResult = await supabase
-    .from('profiles')
-    .select('display_name, email')
-    .eq('id', userId)
-    .maybeSingle();
+  const [favoritesResult, profileResult] = await Promise.all([
+    supabase.from('setup_favorites').select('setup_id').eq('user_id', userId),
+    supabase.from('profiles').select('display_name, email').eq('id', userId).maybeSingle(),
+  ]);
 
   if (favoritesResult.error) {
     throw favoritesResult.error;
@@ -180,7 +184,7 @@ export async function getSetupPageData(
     .from('setups')
     .select(
       'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
-      { count: 'exact' },
+      { count: 'planned' },
     )
     .eq('owner_user_id', userId);
 
@@ -221,8 +225,14 @@ export async function getSetupPageData(
   }
 
   if (filters.query) {
-    const escapedQuery = filters.query.replaceAll('%', '\\%').replaceAll(',', '\\,');
-    setupsQuery = setupsQuery.or(`name.ilike.%${escapedQuery}%,notes.ilike.%${escapedQuery}%`);
+    const searchQuery = buildSetupSearchQuery(filters.query);
+
+    if (searchQuery) {
+      setupsQuery = setupsQuery.textSearch('search_document', searchQuery, {
+        config: 'simple',
+        type: 'websearch',
+      });
+    }
   }
 
   if (filters.favoriteOnly) {
