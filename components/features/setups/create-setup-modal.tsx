@@ -63,6 +63,7 @@ type CreateSetupModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
+  triggerClassName?: string;
 };
 
 type EditSetupModalProps = {
@@ -497,6 +498,7 @@ export function CreateSetupModal({
   cars,
   tracks,
   defaultCarClassId,
+  triggerClassName,
 }: CreateSetupModalProps) {
   return (
     <SetupFormModal
@@ -512,7 +514,10 @@ export function CreateSetupModal({
       trigger={
         <Button
           type="button"
-          className="min-h-10 rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-4 text-white shadow-none hover:bg-[rgba(225,178,122,0.26)]"
+          className={
+            triggerClassName ??
+            'min-h-10 rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-4 text-white shadow-none hover:bg-[rgba(225,178,122,0.26)]'
+          }
         >
           Nuevo setup
         </Button>

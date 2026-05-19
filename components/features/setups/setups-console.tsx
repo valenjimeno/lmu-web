@@ -292,29 +292,29 @@ export function SetupsConsole({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <section className="panel-dark overflow-hidden rounded-[1.25rem]">
-          <div className="hairline-divider flex items-center justify-between gap-3 border-b px-4 py-4">
+          <div className="hairline-divider flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-baseline gap-3">
               <h2 className="text-[1.9rem] font-medium text-white">Biblioteca</h2>
               <span className="text-sm text-muted">{totalCount} setups</span>
             </div>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm.items-center">
               <Button
                 type="button"
                 onClick={handleCompare}
                 disabled={selectedComparisonSetups.length < 2}
-                className={`min-h-10 gap-2 rounded-md px-4 shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 ${
+                className={`min-h-10 w-full gap-2 rounded-md px-3 shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 sm:w-auto sm:px-4 ${
                   selectedComparisonSetups.length >= 2
                     ? 'border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] text-white hover:bg-[rgba(225,178,122,0.26)]'
                     : 'border-white/8 bg-white/[0.03] text-white/38 opacity-70'
                 }`}
               >
-                Comparar
+                <span className="truncate">Comparar</span>
                 <SetupBadge
                   tone="default"
                   className={
                     selectedComparisonSetups.length >= 2
-                      ? 'border-white/16 bg-black/10 px-2 py-0.5 text-[10px] text-white'
-                      : 'border-white/8 bg-transparent px-2 py-0.5 text-[10px] text-white/40'
+                      ? 'shrink-0 border-white/16 bg-black/10 px-2 py-0.5 text-[10px] text-white'
+                      : 'shrink-0 border-white/8 bg-transparent px-2 py-0.5 text-[10px] text-white/40'
                   }
                 >
                   {selectedComparisonSetups.length}/3
@@ -325,6 +325,7 @@ export function SetupsConsole({
                 cars={cars}
                 tracks={tracks}
                 defaultCarClassId={defaultCarClassId}
+                triggerClassName="min-h-10 w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:w-auto sm:px-4"
               />
             </div>
           </div>
