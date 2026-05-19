@@ -13,6 +13,11 @@ import {
 import type { Database } from '@/types/database.types';
 
 const allowedSetupTypes = new Set<Database['public']['Enums']['setup_type']>(['fixed', 'open']);
+const allowedVisibilities = new Set<Database['public']['Enums']['setup_visibility']>([
+  'private',
+  'team',
+  'public',
+]);
 const allowedWeatherSummaries = new Set(['sun', 'sun-cloud', 'rain']);
 
 function parseNullableNumber(value: FormDataEntryValue | null) {
@@ -79,6 +84,7 @@ export async function createSetupAction(formData: FormData) {
   const trackId = String(formData.get('trackId') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
@@ -88,7 +94,13 @@ export async function createSetupAction(formData: FormData) {
   const tcSlipAngle = parseNullableNumber(formData.get('tcSlipAngle'));
   const bestLapMs = parseNullableLapTime(formData.get('bestLap'));
 
-  if (!name || !carId || !trackId || !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open')) {
+  if (
+    !name ||
+    !carId ||
+    !trackId ||
+    !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open') ||
+    !allowedVisibilities.has(rawVisibility as Database['public']['Enums']['setup_visibility'])
+  ) {
     redirect(`${routes.setups}?error=invalid_setup`);
   }
 
@@ -115,6 +127,7 @@ export async function createSetupAction(formData: FormData) {
       carId,
       trackId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
+      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
@@ -147,6 +160,7 @@ export async function updateSetupAction(formData: FormData) {
   const trackId = String(formData.get('trackId') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
@@ -162,6 +176,7 @@ export async function updateSetupAction(formData: FormData) {
     !carId ||
     !trackId ||
     !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open') ||
+    !allowedVisibilities.has(rawVisibility as Database['public']['Enums']['setup_visibility']) ||
     !allowedWeatherSummaries.has(rawWeatherSummary)
   ) {
     redirect(`${routes.setups}/${setupId}?error=invalid_setup`);
@@ -187,6 +202,7 @@ export async function updateSetupAction(formData: FormData) {
       carId,
       trackId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
+      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
@@ -222,6 +238,7 @@ export async function duplicateSetupAction(formData: FormData) {
   const trackId = String(formData.get('trackId') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const rawSetupType = String(formData.get('setupType') ?? '').trim();
+  const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
@@ -239,6 +256,7 @@ export async function duplicateSetupAction(formData: FormData) {
     !carId ||
     !trackId ||
     !allowedSetupTypes.has(rawSetupType as 'fixed' | 'open') ||
+    !allowedVisibilities.has(rawVisibility as Database['public']['Enums']['setup_visibility']) ||
     !allowedWeatherSummaries.has(rawWeatherSummary)
   ) {
     redirect(
@@ -273,6 +291,7 @@ export async function duplicateSetupAction(formData: FormData) {
       carId,
       trackId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
+      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,

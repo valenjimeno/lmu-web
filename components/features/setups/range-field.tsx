@@ -13,6 +13,7 @@ type RangeFieldProps = {
   valueSuffix?: string;
   decimals?: number;
   showRemainingToMax?: boolean;
+  allowedValues?: number[];
 };
 
 export function RangeField({
@@ -26,13 +27,32 @@ export function RangeField({
   valueSuffix = '',
   decimals = 0,
   showRemainingToMax = false,
+  allowedValues,
 }: RangeFieldProps) {
   const id = useId();
-  const [value, setValue] = useState(initialValue ?? defaultValue);
-  const percentage = ((value - min) / (max - min)) * 100;
+  const hasAllowedValues = Boolean(allowedValues?.length);
+  const allowedValueList = hasAllowedValues ? allowedValues : undefined;
+  const resolvedInitialValue = initialValue ?? defaultValue;
+  const initialIndex = allowedValueList
+    ? allowedValueList.reduce((closestIndex, currentValue, currentIndex) => {
+        const closestDistance = Math.abs(allowedValueList[closestIndex] - resolvedInitialValue);
+        const currentDistance = Math.abs(currentValue - resolvedInitialValue);
+
+        return currentDistance < closestDistance ? currentIndex : closestIndex;
+      }, 0)
+    : 0;
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const [value, setValue] = useState(
+    allowedValueList ? allowedValueList[initialIndex] : resolvedInitialValue,
+  );
+  const percentage = allowedValueList
+    ? (selectedIndex / Math.max(allowedValueList.length - 1, 1)) * 100
+    : ((value - min) / (max - min)) * 100;
   const displayValue = showRemainingToMax
     ? `${value.toFixed(decimals)}:${(max - value).toFixed(decimals)}`
     : `${value.toFixed(decimals)}${valueSuffix}`;
+  const displayedMin = allowedValueList ? allowedValueList[0] : min;
+  const displayedMax = allowedValueList ? allowedValueList[allowedValueList.length - 1] : max;
 
   return (
     <label
@@ -48,16 +68,34 @@ export function RangeField({
         </span>
       </div>
       <div className="relative mt-4 px-1">
+        <input name={name} type="hidden" value={value} />
         <input
           id={id}
-          name={name}
           type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(event) => setValue(Number(event.target.value))}
-          onInput={(event) => setValue(Number(event.currentTarget.value))}
+          min={allowedValueList ? 0 : min}
+          max={allowedValueList ? allowedValueList.length - 1 : max}
+          step={allowedValueList ? 1 : step}
+          value={allowedValueList ? selectedIndex : value}
+          onChange={(event) => {
+            if (allowedValueList) {
+              const nextIndex = Number(event.target.value);
+              setSelectedIndex(nextIndex);
+              setValue(allowedValueList[nextIndex]);
+              return;
+            }
+
+            setValue(Number(event.target.value));
+          }}
+          onInput={(event) => {
+            if (allowedValueList) {
+              const nextIndex = Number(event.currentTarget.value);
+              setSelectedIndex(nextIndex);
+              setValue(allowedValueList[nextIndex]);
+              return;
+            }
+
+            setValue(Number(event.currentTarget.value));
+          }}
           aria-valuetext={`${value}${valueSuffix}`}
           className="range-slider h-3 w-full cursor-pointer appearance-none rounded-full border border-white/6 bg-transparent"
           style={{
@@ -67,11 +105,11 @@ export function RangeField({
       </div>
       <div className="mt-3 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         <span>
-          {min}
+          {displayedMin}
           {valueSuffix}
         </span>
         <span>
-          {max}
+          {displayedMax}
           {valueSuffix}
         </span>
       </div>

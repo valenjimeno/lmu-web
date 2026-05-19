@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { CompleteProfileModal } from '@/components/features/profile/complete-profile-modal';
 import { Header } from '@/components/shared/header';
 import { Sidebar } from '@/components/shared/sidebar';
 import { routes } from '@/lib/constants/routes';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { ensureProfileForUser, getProfileCompletion } from '@/services/profile.service';
 
 export default function AppLayout({
   children,
@@ -28,6 +30,9 @@ async function AuthenticatedAppLayout({
     redirect(routes.login);
   }
 
+  await ensureProfileForUser(user);
+  const profileCompletion = await getProfileCompletion(user.id);
+
   return (
     <div className="min-h-screen bg-transparent">
       <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-5 lg:pb-6">
@@ -37,6 +42,9 @@ async function AuthenticatedAppLayout({
           <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:pb-7">{children}</div>
         </div>
       </div>
+      {profileCompletion.isComplete ? null : (
+        <CompleteProfileModal profile={profileCompletion.profile} />
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/components/features/auth/logout-button';
 import { AppNavigation } from '@/components/shared/app-navigation';
+import { routes } from '@/lib/constants/routes';
 import { appNavigationItems } from '@/lib/constants/routes';
 
 export function Header() {
@@ -12,6 +13,10 @@ export function Header() {
     const matchedItem = appNavigationItems.find(
       (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
     );
+
+    if (pathname === routes.profile || pathname.startsWith(`${routes.profile}/`)) {
+      return 'Perfil';
+    }
 
     return matchedItem?.title ?? 'LMU Web';
   }, [pathname]);

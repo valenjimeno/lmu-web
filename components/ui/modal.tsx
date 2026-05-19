@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils/cn';
@@ -9,7 +10,13 @@ type ModalProps = {
 };
 
 export function Modal({ children, className, title }: ModalProps) {
-  if (typeof document === 'undefined') {
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
+  if (!isMounted) {
     return null;
   }
 

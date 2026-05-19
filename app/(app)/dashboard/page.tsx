@@ -25,7 +25,7 @@ export default function DashboardPage() {
               <Button href={routes.setups} asChild>
                 Ir a setups
               </Button>
-              <Button href={routes.settings} asChild variant="secondary">
+              <Button href={routes.profile} asChild variant="secondary">
                 Abrir perfil
               </Button>
             </div>

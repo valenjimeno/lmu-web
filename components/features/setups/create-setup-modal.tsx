@@ -12,7 +12,8 @@ import { RangeField } from '@/components/features/setups/range-field';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
-import { formatLapTime } from '@/lib/utils/setup-formatters';
+import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
+import { formatLapTime, formatSetupVisibility } from '@/lib/utils/setup-formatters';
 import type { SetupSummary } from '@/services/setup.service';
 
 type Option = {
@@ -46,6 +47,7 @@ type SetupFormModalProps = {
     carId?: string;
     trackId?: string;
     setupType?: SetupSummary['setupType'];
+    visibility?: SetupSummary['visibility'];
     notes?: string | null;
     raceDurationMinutes?: number | null;
     weatherSummary?: string | null;
@@ -88,6 +90,14 @@ const weatherOptions: Array<{ value: WeatherValue; label: string }> = [
   { value: 'sun', label: 'Sol' },
   { value: 'sun-cloud', label: 'Sol y nube' },
   { value: 'rain', label: 'Lluvia' },
+];
+
+const visibilityOptions: Array<{
+  value: SetupSummary['visibility'];
+  label: string;
+}> = [
+  { value: 'private', label: formatSetupVisibility('private') },
+  { value: 'public', label: formatSetupVisibility('public') },
 ];
 
 function WeatherIcon({ type }: { type: WeatherValue }) {
@@ -172,6 +182,9 @@ function SetupFormModal({
       ? defaultValues.weatherSummary
       : 'sun',
   );
+  const [selectedVisibility, setSelectedVisibility] = useState<SetupSummary['visibility']>(
+    defaultValues?.visibility ?? 'private',
+  );
 
   const filteredCars = useMemo(
     () => cars.filter((car) => !selectedCarClassId || car.carClassId === selectedCarClassId),
@@ -187,6 +200,7 @@ function SetupFormModal({
         ? defaultValues.weatherSummary
         : 'sun',
     );
+    setSelectedVisibility(defaultValues?.visibility ?? 'private');
     setIsOpen(true);
   }
 
@@ -345,6 +359,36 @@ function SetupFormModal({
                 </select>
               </label>
 
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium text-foreground">Visibilidad</legend>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {visibilityOptions.map((option) => {
+                    const isSelected = selectedVisibility === option.value;
+
+                    return (
+                      <label
+                        key={option.value}
+                        className={`cursor-pointer rounded-[1.25rem] border px-4 py-4 transition ${
+                          isSelected
+                            ? 'border-[rgba(241,196,135,0.42)] bg-[rgba(225,178,122,0.14)] text-white'
+                            : 'border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="visibility"
+                          value={option.value}
+                          checked={isSelected}
+                          onChange={() => setSelectedVisibility(option.value)}
+                          className="sr-only"
+                        />
+                        <div className="text-center text-sm font-semibold">{option.label}</div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">Minutos de carrera</span>
                 <input
@@ -429,27 +473,39 @@ function SetupFormModal({
                   label="Brake Bias"
                   min={0}
                   max={100}
-                  step={0.2}
-                  value={defaultValues?.brakeBias ?? 54}
-                  defaultValue={54}
+                  value={defaultValues?.brakeBias ?? 52}
+                  defaultValue={52}
                   decimals={1}
                   showRemainingToMax
+                  allowedValues={buildBrakeBiasValues()}
                 />
-                <RangeField name="abs" label="ABS" value={defaultValues?.abs ?? 5} />
+                <RangeField
+                  name="abs"
+                  label="ABS"
+                  min={0}
+                  max={9}
+                  value={defaultValues?.abs ?? 5}
+                />
                 <RangeField
                   name="onboardTc"
                   label="ONBOARD TC"
+                  min={0}
+                  max={11}
                   value={defaultValues?.onboardTc ?? 5}
                 />
                 <RangeField
                   name="tcPowerCut"
                   label="TC POWER CUT"
+                  min={0}
+                  max={11}
                   value={defaultValues?.tcPowerCut ?? 5}
                 />
               </div>
               <RangeField
                 name="tcSlipAngle"
                 label="TC SLIP ANGLE"
+                min={0}
+                max={11}
                 value={defaultValues?.tcSlipAngle ?? 5}
               />
 
@@ -508,7 +564,7 @@ export function CreateSetupModal({
       defaultCarClassId={defaultCarClassId}
       titleKicker="Nuevo setup"
       title="Crear una configuración nueva"
-      description="Añade coche, pista, tipo y notas sin salir de la biblioteca. El formulario mantiene una lectura clara también en móvil."
+      description="Añade coche, pista, tipo, visibilidad y notas sin salir de la biblioteca. El formulario mantiene una lectura clara también en móvil."
       submitLabel="Crear setup"
       action={createSetupAction}
       trigger={
@@ -554,6 +610,7 @@ export function EditSetupModal({
         carId: setup.carId,
         trackId: setup.trackId,
         setupType: setup.setupType,
+        visibility: setup.visibility,
         notes: setup.notes,
         raceDurationMinutes: setup.raceDurationMinutes,
         weatherSummary: setup.weatherSummary,

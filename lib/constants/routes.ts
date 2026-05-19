@@ -3,10 +3,16 @@ export const routes = {
   login: '/login',
   dashboard: '/dashboard',
   setups: '/setups',
-  settings: '/settings',
+  profile: '/profile',
 } as const;
 
 export const appNavigationItems = [
+  {
+    href: routes.profile,
+    label: 'Perfil',
+    title: 'Perfil',
+    icon: 'profile',
+  },
   {
     href: routes.setups,
     label: 'Setups',

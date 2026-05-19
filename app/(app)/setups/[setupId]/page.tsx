@@ -18,7 +18,9 @@ import {
   formatDate,
   formatLapTime,
   formatMetricValue,
+  formatSetupVisibility,
 } from '@/lib/utils/setup-formatters';
+import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { getSetupDetail } from '@/services/setup.service';
 import LoadingSetupDetail from './loading';
@@ -43,7 +45,7 @@ const textareaClassName =
   'input-surface min-h-32 w-full rounded-[0.95rem] border-white/10 px-4 py-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
 
 const errorMessages: Record<string, string> = {
-  invalid_setup: 'Necesitamos un nombre valido y un tipo correcto para guardar el setup.',
+  invalid_setup: 'Necesitamos un nombre valido, un tipo correcto y una visibilidad valida.',
   invalid_setup_values: 'Brake Bias, ABS y los controles de traccion deben ser numeros validos.',
   update_failed: 'No hemos podido guardar los cambios. Intentalo de nuevo en unos segundos.',
   duplicate_failed: 'No hemos podido crear la copia. Intentalo de nuevo en unos segundos.',
@@ -117,7 +119,7 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <SetupBadge tone="accent">{setup.setupType}</SetupBadge>
-                  <SetupBadge>{setup.visibility}</SetupBadge>
+                  <SetupBadge>{formatSetupVisibility(setup.visibility)}</SetupBadge>
                   <SetupBadge>{setup.carClassName}</SetupBadge>
                   <SetupBadge>{setup.manufacturerName}</SetupBadge>
                   {setup.isFavorite ? <SetupBadge tone="success">Favorite</SetupBadge> : null}
@@ -224,6 +226,18 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                     </label>
 
                     <label className="block space-y-2">
+                      <span className="text-sm font-medium text-foreground">Visibilidad</span>
+                      <select
+                        name="visibility"
+                        defaultValue={setup.visibility}
+                        className={selectClassName}
+                      >
+                        <option value="private">{formatSetupVisibility('private')}</option>
+                        <option value="public">{formatSetupVisibility('public')}</option>
+                      </select>
+                    </label>
+
+                    <label className="block space-y-2">
                       <span className="text-sm font-medium text-foreground">Notas</span>
                       <textarea
                         name="notes"
@@ -250,7 +264,10 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                   <div className="space-y-2 rounded-[1.1rem] border border-white/8 bg-white/[0.025] p-3">
                     <SetupEmblem label="Coche" value={setup.carName} />
                     <SetupEmblem label="Circuito" value={setup.trackName} />
-                    <SetupEmblem label="Visibilidad" value={setup.visibility} />
+                    <SetupEmblem
+                      label="Visibilidad"
+                      value={formatSetupVisibility(setup.visibility)}
+                    />
                   </div>
                 </div>
               </section>
@@ -275,23 +292,33 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                     label="Brake Bias"
                     min={0}
                     max={100}
-                    step={0.2}
-                    value={setup.brakeBias ?? 54}
-                    defaultValue={54}
+                    value={setup.brakeBias ?? 52}
+                    defaultValue={52}
                     decimals={1}
                     showRemainingToMax
+                    allowedValues={buildBrakeBiasValues()}
                   />
-                  <RangeField name="abs" label="ABS" value={setup.abs ?? 5} />
-                  <RangeField name="onboardTc" label="ONBOARD TC" value={setup.onboardTc ?? 5} />
+                  <RangeField name="abs" label="ABS" min={0} max={9} value={setup.abs ?? 5} />
+                  <RangeField
+                    name="onboardTc"
+                    label="ONBOARD TC"
+                    min={0}
+                    max={11}
+                    value={setup.onboardTc ?? 5}
+                  />
                   <RangeField
                     name="tcPowerCut"
                     label="TC POWER CUT"
+                    min={0}
+                    max={11}
                     value={setup.tcPowerCut ?? 5}
                   />
                   <div className="xl:col-span-2">
                     <RangeField
                       name="tcSlipAngle"
                       label="TC SLIP ANGLE"
+                      min={0}
+                      max={11}
                       value={setup.tcSlipAngle ?? 5}
                     />
                   </div>
@@ -329,7 +356,10 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                   <SetupEmblem label="Coche" value={`${setup.manufacturerName} ${setup.carName}`} />
                   <SetupEmblem label="Circuito" value={setup.trackName} />
                   <SetupEmblem label="Clase" value={setup.carClassName} />
-                  <SetupEmblem label="Visibilidad" value={setup.visibility} />
+                  <SetupEmblem
+                    label="Visibilidad"
+                    value={formatSetupVisibility(setup.visibility)}
+                  />
                 </div>
 
                 <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-white/[0.035] p-4 sm:p-5">

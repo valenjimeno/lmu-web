@@ -471,6 +471,7 @@ type CreateSetupInput = {
   carId: string;
   trackId: string;
   setupType: Database['public']['Enums']['setup_type'];
+  visibility: Database['public']['Enums']['setup_visibility'];
   notes?: string;
   raceDurationMinutes?: number | null;
   weatherSummary?: string | null;
@@ -489,6 +490,7 @@ type UpdateSetupInput = {
   carId: string;
   trackId: string;
   setupType: Database['public']['Enums']['setup_type'];
+  visibility: Database['public']['Enums']['setup_visibility'];
   notes?: string;
   raceDurationMinutes?: number | null;
   weatherSummary?: string | null;
@@ -516,6 +518,7 @@ export async function createSetup(input: CreateSetupInput) {
       track_id: input.trackId,
       name: input.name,
       setup_type: input.setupType,
+      visibility: input.visibility,
       notes: input.notes ? input.notes : null,
       race_duration_minutes: input.raceDurationMinutes ?? null,
       weather_summary: input.weatherSummary ? input.weatherSummary : null,
@@ -525,7 +528,6 @@ export async function createSetup(input: CreateSetupInput) {
       tc_power_cut: input.tcPowerCut ?? null,
       tc_slip_angle: input.tcSlipAngle ?? null,
       best_lap_ms: input.bestLapMs ?? null,
-      visibility: 'private',
     })
     .select('id')
     .single();
@@ -547,6 +549,7 @@ export async function updateSetup(input: UpdateSetupInput) {
       car_id: input.carId,
       track_id: input.trackId,
       setup_type: input.setupType,
+      visibility: input.visibility,
       notes: input.notes ? input.notes : null,
       race_duration_minutes: input.raceDurationMinutes ?? null,
       weather_summary: input.weatherSummary ? input.weatherSummary : null,

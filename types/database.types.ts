@@ -109,30 +109,53 @@ export type Database = {
       };
       profiles: {
         Row: {
+          active_team_id: string | null;
           avatar_url: string | null;
           created_at: string;
           display_name: string | null;
           email: string | null;
+          first_name: string | null;
+          full_name: string | null;
           id: string;
+          last_name: string | null;
+          preferences: Json;
           updated_at: string;
         };
         Insert: {
+          active_team_id?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           display_name?: string | null;
           email?: string | null;
+          first_name?: string | null;
+          full_name?: string | null;
           id: string;
+          last_name?: string | null;
+          preferences?: Json;
           updated_at?: string;
         };
         Update: {
+          active_team_id?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           display_name?: string | null;
           email?: string | null;
+          first_name?: string | null;
+          full_name?: string | null;
           id?: string;
+          last_name?: string | null;
+          preferences?: Json;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'profiles_active_team_id_fkey';
+            columns: ['active_team_id'];
+            isOneToOne: false;
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       setup_favorites: {
         Row: {
@@ -362,7 +385,7 @@ export type Database = {
     };
     Enums: {
       setup_type: 'fixed' | 'open';
-      setup_visibility: 'private' | 'team';
+      setup_visibility: 'private' | 'team' | 'public';
       team_role: 'owner' | 'member';
     };
     CompositeTypes: {
@@ -490,7 +513,7 @@ export const Constants = {
   public: {
     Enums: {
       setup_type: ['fixed', 'open'],
-      setup_visibility: ['private', 'team'],
+      setup_visibility: ['private', 'team', 'public'],
       team_role: ['owner', 'member'],
     },
   },

@@ -50,3 +50,14 @@ export function formatWeatherSummary(value: string | null) {
       return 'No definido';
   }
 }
+
+export function formatSetupVisibility(value: 'private' | 'team' | 'public') {
+  switch (value) {
+    case 'private':
+      return 'Privado';
+    case 'team':
+      return 'Equipo';
+    case 'public':
+      return 'Público';
+  }
+}

@@ -1,6 +1,11 @@
 export type Profile = {
   id: string;
-  email?: string | null;
-  displayName?: string | null;
-  avatarUrl?: string | null;
+  nickname?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+
+export type ProfileCompletion = {
+  profile: Profile | null;
+  isComplete: boolean;
 };

@@ -48,7 +48,7 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
   );
 }
 
-function NavIcon({ type }: { type: 'speed' | 'compare' | 'settings' }) {
+function NavIcon({ type }: { type: 'speed' | 'compare' | 'profile' }) {
   const className = 'h-[18px] w-[18px] shrink-0';
 
   if (type === 'speed') {

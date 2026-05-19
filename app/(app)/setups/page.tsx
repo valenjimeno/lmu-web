@@ -21,7 +21,7 @@ type SetupsPageProps = {
 };
 
 const errorMessages: Record<string, string> = {
-  invalid_setup: 'Completa nombre, coche, circuito y tipo de setup para poder guardarlo.',
+  invalid_setup: 'Completa nombre, coche, circuito, tipo y visibilidad para poder guardarlo.',
   invalid_setup_values:
     'Brake Bias, ABS y los controles de tracción deben ser números válidos o quedarse vacíos.',
   create_failed: 'No hemos podido guardar el setup. Inténtalo de nuevo en unos segundos.',
@@ -65,7 +65,7 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
   });
 
   const feedbackMessage = resolvedSearchParams.created
-    ? 'Setup creado correctamente y guardado en tu biblioteca privada.'
+    ? 'Setup creado correctamente.'
     : resolvedSearchParams.deleted
       ? 'Setup eliminado correctamente de tu biblioteca.'
       : resolvedSearchParams.error
