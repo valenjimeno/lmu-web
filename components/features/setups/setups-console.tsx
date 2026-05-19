@@ -302,30 +302,20 @@ export function SetupsConsole({
                 type="button"
                 onClick={handleCompare}
                 disabled={selectedComparisonSetups.length < 2}
-                className={`min-h-10 w-full gap-2 rounded-md px-3 shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 sm:w-auto sm:px-4 ${
+                className={`min-h-[4.625rem] w-full rounded-md px-3 py-2 text-center shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0 ${
                   selectedComparisonSetups.length >= 2
                     ? 'border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] text-white hover:bg-[rgba(225,178,122,0.26)]'
                     : 'border-white/8 bg-white/[0.03] text-white/38 opacity-70'
                 }`}
               >
-                <span className="truncate">Comparar</span>
-                <SetupBadge
-                  tone="default"
-                  className={
-                    selectedComparisonSetups.length >= 2
-                      ? 'shrink-0 border-white/16 bg-black/10 px-2 py-0.5 text-[10px] text-white'
-                      : 'shrink-0 border-white/8 bg-transparent px-2 py-0.5 text-[10px] text-white/40'
-                  }
-                >
-                  {selectedComparisonSetups.length}/3
-                </SetupBadge>
+                <span className="max-w-full text-xs leading-none sm:text-sm">Comparar</span>
               </Button>
               <CreateSetupModal
                 carClasses={carClasses}
                 cars={cars}
                 tracks={tracks}
                 defaultCarClassId={defaultCarClassId}
-                triggerClassName="min-h-10 w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:w-auto sm:px-4"
+                triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
               />
             </div>
           </div>

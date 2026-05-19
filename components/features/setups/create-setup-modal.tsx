@@ -519,7 +519,7 @@ export function CreateSetupModal({
             'min-h-10 rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-4 text-white shadow-none hover:bg-[rgba(225,178,122,0.26)]'
           }
         >
-          Nuevo setup
+          <span className="text-xs leading-none sm:text-sm">Nuevo setup</span>
         </Button>
       }
     />
