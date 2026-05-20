@@ -31,6 +31,7 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             className={cn(
               'flex items-center gap-3 rounded-[1.35rem] px-4 py-3 text-sm font-semibold transition duration-200',
               isHorizontal ? 'shrink-0' : 'block',
