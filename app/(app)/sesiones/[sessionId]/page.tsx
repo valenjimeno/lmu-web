@@ -4,6 +4,7 @@ import { DeleteSessionDialog } from '@/components/features/sessions/delete-sessi
 import { Button } from '@/components/ui/button';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime, formatRaceDurationMinutes } from '@/lib/utils/setup-formatters';
+import { formatSessionType } from '@/lib/utils/session-type';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { getSessionDetail } from '@/services/session.service';
 import LoadingSessionDetail from './loading';
@@ -387,6 +388,10 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
               <SessionDataLine
                 label="Clase"
                 value={session.sourceCarClass ?? session.carClassId ?? 'No definida'}
+              />
+              <SessionDataLine
+                label="Tipo de sesión"
+                value={formatSessionType(session.sessionType)}
               />
               <SessionDataLine label="Circuito" value={session.trackName} />
               <SessionDataLine

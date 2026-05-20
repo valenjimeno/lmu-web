@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
+import { detectSessionTypeFromXml } from '@/lib/utils/session-type';
 import { deriveSessionMetrics } from '@/services/session-metrics';
 import type { Database } from '@/types/database.types';
 
@@ -455,7 +456,8 @@ function parseRaceXml(xmlContent: string): ParsedRaceXml {
       source_type: 'rfactor_xml',
       imported_at: new Date().toISOString(),
       session_datetime: parseRaceDateTime(extractTagContent(normalizedXml, 'TimeString')),
-      session_type: extractTagContent(normalizedXml, 'Setting'),
+      session_type:
+        detectSessionTypeFromXml(normalizedXml) ?? extractTagContent(normalizedXml, 'Setting'),
       server_name: extractTagContent(normalizedXml, 'ServerName'),
       game_version: extractTagContent(normalizedXml, 'GameVersion'),
       track_venue: extractTagContent(normalizedXml, 'TrackVenue'),
@@ -477,6 +479,7 @@ function parseRaceXml(xmlContent: string): ParsedRaceXml {
       free_settings: parseNullableInteger(extractTagContent(normalizedXml, 'FreeSettings')),
       raw_payload: {
         raceDateTime: extractTagContent(normalizedXml, 'TimeString'),
+        sourceSessionSetting: extractTagContent(normalizedXml, 'Setting'),
         clientFuelVisible: extractTagContent(normalizedXml, 'ClientFuelVisible'),
         connectionType: extractTagContent(normalizedXml, 'ConnectionType'),
         connectionUpload: extractTagAttribute(normalizedXml, 'ConnectionType', 'upload'),

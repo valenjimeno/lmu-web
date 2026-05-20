@@ -7,7 +7,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { CreateSessionModal } from '@/components/features/sessions/create-session-modal';
 import { EmptyState } from '@/components/shared/empty-state';
 import { routes } from '@/lib/constants/routes';
-import { formatDate, formatLapTime, formatRaceDurationMinutes } from '@/lib/utils/setup-formatters';
+import { formatDate, formatLapTime } from '@/lib/utils/setup-formatters';
+import { formatSessionType } from '@/lib/utils/session-type';
 import type { SessionSummary } from '@/services/session.service';
 
 type Option = {
@@ -291,9 +292,12 @@ export function SessionsConsole({
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="block truncate text-base font-medium text-white">
-                          {session.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="block min-w-0 flex-1 truncate text-base font-medium text-white">
+                            {session.name}
+                          </p>
+                          <SubtleTag>{formatSessionType(session.sessionType)}</SubtleTag>
+                        </div>
                         <p className="mt-1 truncate text-sm text-white/52 lg:hidden">
                           {session.driverName} ·{' '}
                           {formatDate(session.sessionDateTime ?? session.importedAt)}
@@ -608,24 +612,6 @@ function activeFilterSummary(filters: SessionConsoleFilters) {
   return items.length > 0 ? `Filtros activos: ${items.join(', ')}` : null;
 }
 
-function SummaryCard({
-  label,
-  value,
-  helpText,
-}: {
-  label: string;
-  value: string;
-  helpText: string;
-}) {
-  return (
-    <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.02] px-4 py-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">{label}</p>
-      <p className="mt-3 text-[1.9rem] leading-none font-medium text-white">{value}</p>
-      <p className="mt-2 text-xs text-white/48">{helpText}</p>
-    </div>
-  );
-}
-
 function DataLine({ label, value, muted }: { label: string; value: string; muted?: string }) {
   return (
     <div className="min-w-0">
@@ -640,15 +626,6 @@ function DataLine({ label, value, muted }: { label: string; value: string; muted
           {muted}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.02] px-4 py-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">{label}</p>
-      <p className="mt-3 text-[1.8rem] leading-none font-medium text-white">{value}</p>
     </div>
   );
 }
@@ -678,14 +655,6 @@ function PositionDeltaLine({ value }: { value: number | null }) {
       <span className="text-white/52">Posiciones ganadas</span>
       <span className={`font-medium ${valueClassName}`}>{formattedValue}</span>
     </div>
-  );
-}
-
-function Tag({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.12)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#edd1a3]">
-      {children}
-    </span>
   );
 }
 
@@ -758,6 +727,14 @@ function SessionInsightsPanel({
                   Piloto
                 </span>
                 <span className="truncate text-right text-white/72">{session.driverName}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Tipo
+                </span>
+                <span className="truncate text-right text-white/72">
+                  {formatSessionType(session.sessionType)}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">

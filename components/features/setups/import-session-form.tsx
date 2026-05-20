@@ -3,6 +3,7 @@
 import type { ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { detectSessionTypeFromXml, formatSessionType } from '@/lib/utils/session-type';
 
 type ImportSessionFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -103,6 +104,7 @@ export function ImportSessionForm({
   const [xmlContent, setXmlContent] = useState('');
   const [availableDriverNames, setAvailableDriverNames] = useState<string[]>([]);
   const [selectedDriverName, setSelectedDriverName] = useState('');
+  const [sessionType, setSessionType] = useState<string | null>(null);
   const [matchState, setMatchState] = useState<MatchState>('idle');
   const [isDuplicateSession, setIsDuplicateSession] = useState(false);
 
@@ -121,6 +123,7 @@ export function ImportSessionForm({
       setXmlContent('');
       setAvailableDriverNames([]);
       setSelectedDriverName('');
+      setSessionType(null);
       setMatchState('idle');
       setIsDuplicateSession(false);
       return;
@@ -129,12 +132,14 @@ export function ImportSessionForm({
     const nextXmlContent = await selectedFile.text();
     const nextXmlHash = await computeXmlHash(nextXmlContent);
     const nextDriverNames = extractDriverNames(nextXmlContent);
+    const nextSessionType = detectSessionTypeFromXml(nextXmlContent);
     const preferredDriverName = findPreferredDriverName(nextDriverNames, preferredDriverNames);
     const duplicateDetected = importedSessionHashes.includes(nextXmlHash);
 
     setSourceFileName(selectedFile.name);
     setXmlContent(nextXmlContent);
     setAvailableDriverNames(nextDriverNames);
+    setSessionType(nextSessionType);
     setIsDuplicateSession(duplicateDetected);
 
     if (requireSessionName && !sessionName.trim()) {
@@ -199,6 +204,12 @@ export function ImportSessionForm({
       <p className="text-xs leading-6 text-muted">
         Intentaremos encontrar automáticamente tu piloto usando: {preferredDriverSummary}
       </p>
+
+      {xmlContent ? (
+        <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/78">
+          Tipo de sesión detectado: <strong>{formatSessionType(sessionType)}</strong>
+        </div>
+      ) : null}
 
       {matchState === 'matched' ? (
         <div className="rounded-[1rem] border border-emerald-400/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">

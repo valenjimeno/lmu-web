@@ -14,6 +14,7 @@ type SetupSessionRow = Pick<
   | 'source_file_name'
   | 'imported_at'
   | 'session_datetime'
+  | 'session_type'
   | 'track_venue'
   | 'track_course'
   | 'race_time_minutes'
@@ -128,6 +129,7 @@ type SessionIdentityRow = Pick<
   | 'source_file_name'
   | 'imported_at'
   | 'session_datetime'
+  | 'session_type'
   | 'track_venue'
   | 'track_course'
   | 'race_time_minutes'
@@ -155,6 +157,7 @@ export type SessionSummary = {
   sourceFileName: string | null;
   importedAt: string;
   sessionDateTime: string | null;
+  sessionType: string | null;
   raceDurationMinutes: number | null;
   bestLapMs: number | null;
   gridPos: number | null;
@@ -308,6 +311,7 @@ function buildSessionSummary(
     sourceFileName: session.source_file_name,
     importedAt: session.imported_at,
     sessionDateTime: session.session_datetime,
+    sessionType: session.session_type,
     raceDurationMinutes: session.race_time_minutes,
     bestLapMs:
       session.best_lap_seconds !== null ? Math.round(session.best_lap_seconds * 1000) : null,
@@ -369,254 +373,6 @@ function canonicalizeSessionClass(value: string | null | undefined) {
   }
 
   return normalized;
-}
-
-function average(values: number[]) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function calculateStdDeviation(values: number[]) {
-  if (values.length < 2) {
-    return null;
-  }
-
-  const mean = average(values);
-
-  if (mean === null) {
-    return null;
-  }
-
-  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
-}
-
-function calculateTireDrop(laps: SetupSessionLapRow[]) {
-  const validStintLaps = laps.filter((lap) => lap.is_valid_lap && !lap.pit_flag);
-
-  if (validStintLaps.length < 2) {
-    return { front: null, rear: null };
-  }
-
-  const firstLap = validStintLaps[0];
-  const lastLap = validStintLaps[validStintLaps.length - 1];
-  const firstFront =
-    firstLap.tire_wear_fl !== null && firstLap.tire_wear_fr !== null
-      ? (firstLap.tire_wear_fl + firstLap.tire_wear_fr) / 2
-      : null;
-  const lastFront =
-    lastLap.tire_wear_fl !== null && lastLap.tire_wear_fr !== null
-      ? (lastLap.tire_wear_fl + lastLap.tire_wear_fr) / 2
-      : null;
-  const firstRear =
-    firstLap.tire_wear_rl !== null && firstLap.tire_wear_rr !== null
-      ? (firstLap.tire_wear_rl + firstLap.tire_wear_rr) / 2
-      : null;
-  const lastRear =
-    lastLap.tire_wear_rl !== null && lastLap.tire_wear_rr !== null
-      ? (lastLap.tire_wear_rl + lastLap.tire_wear_rr) / 2
-      : null;
-
-  return {
-    front: firstFront !== null && lastFront !== null ? firstFront - lastFront : null,
-    rear: firstRear !== null && lastRear !== null ? firstRear - lastRear : null,
-  };
-}
-
-function calculateOptimalLapMs(laps: SetupSessionLapRow[]) {
-  const sector1Values = laps
-    .map((lap) => lap.sector_1_seconds)
-    .filter((value): value is number => value !== null && value > 0);
-  const sector2Values = laps
-    .map((lap) => lap.sector_2_seconds)
-    .filter((value): value is number => value !== null && value > 0);
-  const sector3Values = laps
-    .map((lap) => lap.sector_3_seconds)
-    .filter((value): value is number => value !== null && value > 0);
-
-  if (sector1Values.length === 0 || sector2Values.length === 0 || sector3Values.length === 0) {
-    return null;
-  }
-
-  return Math.round(
-    (Math.min(...sector1Values) + Math.min(...sector2Values) + Math.min(...sector3Values)) * 1000,
-  );
-}
-
-function calculateRollingAverage(values: number[], windowSize: number, mode: 'best' | 'last') {
-  if (values.length < windowSize) {
-    return null;
-  }
-
-  const windowAverages: number[] = [];
-
-  for (let index = 0; index <= values.length - windowSize; index += 1) {
-    const window = values.slice(index, index + windowSize);
-    const windowAverage = average(window);
-
-    if (windowAverage !== null) {
-      windowAverages.push(windowAverage);
-    }
-  }
-
-  if (windowAverages.length === 0) {
-    return null;
-  }
-
-  return mode === 'best' ? Math.min(...windowAverages) : windowAverages[windowAverages.length - 1];
-}
-
-function calculateValidLapRate(laps: SetupSessionLapRow[]) {
-  const timedLaps = laps.filter((lap) => !lap.pit_flag && lap.lap_time_seconds !== null);
-
-  if (timedLaps.length === 0) {
-    return null;
-  }
-
-  const validTimedLaps = timedLaps.filter((lap) => lap.is_valid_lap);
-  return validTimedLaps.length / timedLaps.length;
-}
-
-function calculateFuelProjection(
-  averageFuelUsedPerLap: number | null,
-  averageLapMs: number | null,
-  minutes: number,
-) {
-  if (averageFuelUsedPerLap === null || averageLapMs === null || averageLapMs <= 0) {
-    return null;
-  }
-
-  const projectedLapCount = (minutes * 60_000) / averageLapMs;
-  return averageFuelUsedPerLap * projectedLapCount;
-}
-
-function calculateWearProfile(laps: SetupSessionLapRow[]) {
-  const validStintLaps = laps.filter((lap) => lap.is_valid_lap && !lap.pit_flag);
-
-  if (validStintLaps.length < 2) {
-    return {
-      frontDropPerLap: null,
-      rearDropPerLap: null,
-      frontRearWearRatio: null,
-      leftRightWearRatio: null,
-    };
-  }
-
-  const firstLap = validStintLaps[0];
-  const lastLap = validStintLaps[validStintLaps.length - 1];
-  const lapCount = validStintLaps.length - 1;
-  const frontLeftDrop =
-    firstLap.tire_wear_fl !== null && lastLap.tire_wear_fl !== null
-      ? firstLap.tire_wear_fl - lastLap.tire_wear_fl
-      : null;
-  const frontRightDrop =
-    firstLap.tire_wear_fr !== null && lastLap.tire_wear_fr !== null
-      ? firstLap.tire_wear_fr - lastLap.tire_wear_fr
-      : null;
-  const rearLeftDrop =
-    firstLap.tire_wear_rl !== null && lastLap.tire_wear_rl !== null
-      ? firstLap.tire_wear_rl - lastLap.tire_wear_rl
-      : null;
-  const rearRightDrop =
-    firstLap.tire_wear_rr !== null && lastLap.tire_wear_rr !== null
-      ? firstLap.tire_wear_rr - lastLap.tire_wear_rr
-      : null;
-  const leftDrop =
-    frontLeftDrop !== null && rearLeftDrop !== null ? (frontLeftDrop + rearLeftDrop) / 2 : null;
-  const rightDrop =
-    frontRightDrop !== null && rearRightDrop !== null ? (frontRightDrop + rearRightDrop) / 2 : null;
-  const tireDrop = calculateTireDrop(validStintLaps);
-
-  return {
-    frontDropPerLap: tireDrop.front !== null && lapCount > 0 ? tireDrop.front / lapCount : null,
-    rearDropPerLap: tireDrop.rear !== null && lapCount > 0 ? tireDrop.rear / lapCount : null,
-    frontRearWearRatio:
-      tireDrop.front !== null && tireDrop.rear !== null && tireDrop.rear > 0
-        ? tireDrop.front / tireDrop.rear
-        : null,
-    leftRightWearRatio:
-      rightDrop !== null && leftDrop !== null && leftDrop > 0 ? rightDrop / leftDrop : null,
-  };
-}
-
-function buildSessionInsights({
-  positionGain,
-  finishPos,
-  validLapRate,
-  paceFadeMs,
-  frontRearWearRatio,
-  leftRightWearRatio,
-  fuelMinPerLap,
-  fuelMaxPerLap,
-}: {
-  positionGain: number | null;
-  finishPos: number | null;
-  validLapRate: number | null;
-  paceFadeMs: number | null;
-  frontRearWearRatio: number | null;
-  leftRightWearRatio: number | null;
-  fuelMinPerLap: number | null;
-  fuelMaxPerLap: number | null;
-}) {
-  const insights: string[] = [];
-
-  if (positionGain !== null && positionGain > 0) {
-    insights.push(
-      `Buena ejecución de carrera: ganó ${positionGain} posiciones${finishPos ? ` y acabó P${finishPos}` : ''}.`,
-    );
-  }
-
-  if (validLapRate !== null) {
-    if (validLapRate >= 0.9) {
-      insights.push('Stint limpio: casi todas las vueltas cronometradas fueron válidas.');
-    } else if (validLapRate < 0.75) {
-      insights.push('Hubo bastantes vueltas no válidas o de transición; hay margen de limpieza.');
-    }
-  }
-
-  if (paceFadeMs !== null) {
-    if (paceFadeMs > 1500) {
-      insights.push(
-        'El ritmo cae al final del stint; el coche sufre más con desgaste o combustible.',
-      );
-    } else if (paceFadeMs < -500) {
-      insights.push(
-        'El stint va a mejor con el paso de las vueltas; el coche crece cuando baja peso.',
-      );
-    } else {
-      insights.push('Ritmo bastante estable entre el inicio y el final del stint.');
-    }
-  }
-
-  if (frontRearWearRatio !== null) {
-    if (frontRearWearRatio > 1.12) {
-      insights.push('La degradación se concentra en el eje delantero.');
-    } else if (frontRearWearRatio < 0.9) {
-      insights.push('La degradación se concentra más en el eje trasero.');
-    }
-  }
-
-  if (leftRightWearRatio !== null) {
-    if (leftRightWearRatio > 1.08) {
-      insights.push('El lado derecho trabaja más que el izquierdo en este stint.');
-    } else if (leftRightWearRatio < 0.92) {
-      insights.push('El lado izquierdo está soportando más carga que el derecho.');
-    }
-  }
-
-  if (
-    fuelMinPerLap !== null &&
-    fuelMaxPerLap !== null &&
-    fuelMaxPerLap > 0 &&
-    fuelMaxPerLap - fuelMinPerLap <= 0.004
-  ) {
-    insights.push('El consumo es muy estable vuelta a vuelta.');
-  }
-
-  return insights.slice(0, 5);
 }
 
 export async function getSessionPageData(
@@ -696,7 +452,7 @@ export async function getSessionPageData(
   let standaloneSessionsQuery = supabase
     .from('setup_sessions')
     .select(
-      'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
+      'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
     )
     .eq('owner_user_id', userId)
     .is('setup_id', null)
@@ -717,7 +473,7 @@ export async function getSessionPageData(
       ? supabase
           .from('setup_sessions')
           .select(
-            'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
+            'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
           )
           .eq('owner_user_id', userId)
           .in(
