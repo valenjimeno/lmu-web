@@ -3,6 +3,7 @@ export type Profile = {
   nickname?: string | null;
   firstName?: string | null;
   lastName?: string | null;
+  fullName?: string | null;
 };
 
 export type ProfileCompletion = {

@@ -1,9 +1,14 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
-import { duplicateSetupAction, updateSetupAction } from '@/app/(app)/setups/actions';
+import {
+  duplicateSetupAction,
+  importSetupSessionAction,
+  updateSetupAction,
+} from '@/app/(app)/setups/actions';
 import { DeleteSetupDialog } from '@/components/features/setups/delete-setup-dialog';
 import { FavoriteToggleButton } from '@/components/features/setups/favorite-toggle-button';
+import { ImportSessionForm } from '@/components/features/setups/import-session-form';
 import { RangeField } from '@/components/features/setups/range-field';
 import {
   getBrandMark,
@@ -22,6 +27,7 @@ import {
 } from '@/lib/utils/setup-formatters';
 import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { getProfilePageData } from '@/services/profile.service';
 import { getSetupDetail } from '@/services/setup.service';
 import LoadingSetupDetail from './loading';
 
@@ -33,6 +39,7 @@ type SetupDetailPageProps = {
     edit?: string;
     duplicate?: string;
     duplicated?: string;
+    imported?: string;
     saved?: string;
     error?: string;
   }>;
@@ -49,6 +56,12 @@ const errorMessages: Record<string, string> = {
   invalid_setup_values: 'Brake Bias, ABS y los controles de traccion deben ser numeros validos.',
   update_failed: 'No hemos podido guardar los cambios. Intentalo de nuevo en unos segundos.',
   duplicate_failed: 'No hemos podido crear la copia. Intentalo de nuevo en unos segundos.',
+  import_invalid_xml: 'No hemos podido leer el XML. Revisa el fichero e inténtalo de nuevo.',
+  import_driver_not_found:
+    'No hemos encontrado el piloto seleccionado en el XML. Elige otro nombre del listado.',
+  import_duplicate_session:
+    'Este XML ya estaba importado para este setup. Si quieres reimportarlo, usa otro fichero.',
+  import_failed: 'No hemos podido importar la sesión. Inténtalo de nuevo en unos segundos.',
   delete_confirmation_required:
     'Para borrar el setup tienes que marcar la confirmacion y escribir ELIMINAR.',
   delete_failed: 'No hemos podido borrar el setup. Intentalo de nuevo en unos segundos.',
@@ -73,7 +86,10 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
     redirect(routes.login);
   }
 
-  const setup = await getSetupDetail(user.id, resolvedParams.setupId);
+  const [setup, profilePageData] = await Promise.all([
+    getSetupDetail(user.id, resolvedParams.setupId),
+    getProfilePageData(user.id),
+  ]);
 
   if (!setup) {
     notFound();
@@ -84,15 +100,24 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
 
   const feedbackMessage = resolvedSearchParams.duplicated
     ? 'Copia creada correctamente. Ya puedes seguir afinando este setup sin tocar el original.'
-    : resolvedSearchParams.saved
-      ? 'Cambios guardados correctamente. La fecha de modificacion se ha actualizado.'
-      : resolvedSearchParams.error
-        ? (errorMessages[resolvedSearchParams.error] ?? 'Ha ocurrido un error inesperado.')
-        : undefined;
+    : resolvedSearchParams.imported
+      ? 'Sesión importada correctamente. Ya puedes usarla para validar y enriquecer este setup.'
+      : resolvedSearchParams.saved
+        ? 'Cambios guardados correctamente. La fecha de modificacion se ha actualizado.'
+        : resolvedSearchParams.error
+          ? (errorMessages[resolvedSearchParams.error] ?? 'Ha ocurrido un error inesperado.')
+          : undefined;
 
   const feedbackTone = resolvedSearchParams.error ? 'text-[#f3b4aa]' : 'text-[#edd1a3]';
   const detailPath = `${routes.setups}/${setup.id}`;
   const favoriteReturnTo = isEditMode ? `${detailPath}?edit=1` : detailPath;
+  const preferredDriverNames = [
+    profilePageData.profile?.firstName && profilePageData.profile?.lastName
+      ? `${profilePageData.profile.firstName} ${profilePageData.profile.lastName}`
+      : null,
+    profilePageData.profile?.nickname ?? null,
+    setup.ownerDisplayName,
+  ].filter((value): value is string => Boolean(value?.trim()));
 
   return (
     <section className="space-y-6">
@@ -160,6 +185,32 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
             >
               {feedbackMessage}
             </div>
+          ) : null}
+
+          {!isEditMode ? (
+            <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
+                  Importación
+                </p>
+                <h3 className="text-2xl font-semibold tracking-tight text-white">
+                  Importar sesión XML
+                </h3>
+                <p className="max-w-2xl text-sm leading-7 text-muted">
+                  Sube un XML de resultados para vincular una sesión real a este setup. Si no
+                  encontramos tu piloto automáticamente, te dejaremos elegir qué nombre importar.
+                </p>
+              </div>
+
+              <div className="mt-6">
+                <ImportSessionForm
+                  action={importSetupSessionAction}
+                  setupId={setup.id}
+                  importedSessionHashes={[]}
+                  preferredDriverNames={preferredDriverNames}
+                />
+              </div>
+            </section>
           ) : null}
 
           {isEditMode ? (

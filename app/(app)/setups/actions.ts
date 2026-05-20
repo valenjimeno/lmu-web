@@ -10,6 +10,7 @@ import {
   toggleSetupFavorite,
   updateSetup,
 } from '@/services/setup.service';
+import { importSetupSession } from '@/services/setup-session.service';
 import type { Database } from '@/types/database.types';
 
 const allowedSetupTypes = new Set<Database['public']['Enums']['setup_type']>(['fixed', 'open']);
@@ -70,6 +71,43 @@ function parseNullableLapTime(value: FormDataEntryValue | null) {
   const milliseconds = Number(match[3]);
 
   return minutes * 60000 + seconds * 1000 + milliseconds;
+}
+
+function resolveSafeSetupsReturnTo(value: FormDataEntryValue | null) {
+  const returnTo = String(value ?? '').trim();
+
+  if (!returnTo.startsWith(routes.setups)) {
+    return routes.setups;
+  }
+
+  return returnTo;
+}
+
+function serializeImportError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts = [
+      typeof candidate.code === 'string' ? candidate.code : null,
+      typeof candidate.message === 'string' ? candidate.message : null,
+      typeof candidate.details === 'string' ? candidate.details : null,
+      typeof candidate.hint === 'string' ? candidate.hint : null,
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(' | ').slice(0, 240);
+    }
+  }
+
+  return 'unknown_import_error';
 }
 
 export async function createSetupAction(formData: FormData) {
@@ -391,4 +429,66 @@ export async function toggleSetupFavoriteAction(formData: FormData) {
   revalidatePath(routes.setups);
   revalidatePath(`${routes.setups}/${setupId}`);
   redirect(returnTo && returnTo.startsWith(routes.setups) ? returnTo : routes.setups);
+}
+
+export async function importSetupSessionAction(formData: FormData) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(routes.login);
+  }
+
+  const setupId = String(formData.get('setupId') ?? '').trim();
+  const xmlContent = String(formData.get('xmlContent') ?? '').trim();
+  const driverName = String(formData.get('driverName') ?? '').trim();
+  const sourceFileName = String(formData.get('sourceFileName') ?? '').trim();
+  const returnTo = resolveSafeSetupsReturnTo(formData.get('returnTo'));
+
+  if (!setupId || !xmlContent) {
+    redirect(`${returnTo}?error=import_invalid_xml`);
+  }
+
+  if (!driverName) {
+    redirect(`${returnTo}?error=import_driver_not_found`);
+  }
+
+  try {
+    await importSetupSession({
+      ownerUserId: user.id,
+      setupId,
+      xmlContent,
+      driverName,
+      sourceFileName,
+    });
+  } catch (error) {
+    const serializedError = serializeImportError(error);
+
+    console.error('importSetupSessionAction failed', {
+      setupId,
+      driverName,
+      sourceFileName: sourceFileName || null,
+      error: serializedError,
+    });
+
+    if (error instanceof Error) {
+      if (error.message === 'empty_xml' || error.message === 'invalid_xml') {
+        redirect(`${returnTo}?error=import_invalid_xml`);
+      }
+
+      if (error.message === 'driver_not_found') {
+        redirect(`${returnTo}?error=import_driver_not_found`);
+      }
+
+      if (error.message === 'duplicate_session') {
+        redirect(`${returnTo}?error=import_duplicate_session`);
+      }
+    }
+
+    redirect(`${returnTo}?error=import_failed&debug=${encodeURIComponent(serializedError)}`);
+  }
+
+  revalidatePath(routes.setups);
+  revalidatePath(`${routes.setups}/${setupId}`);
+  revalidatePath(routes.sessions);
+  redirect(`${returnTo}?imported=1`);
 }

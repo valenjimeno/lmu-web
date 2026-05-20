@@ -43,6 +43,7 @@ function mapProfile(row: ProfileRow | null): Profile | null {
     nickname: row.display_name,
     firstName: row.first_name,
     lastName: row.last_name,
+    fullName: row.full_name,
   };
 }
 
@@ -50,7 +51,7 @@ export async function getProfilePageData(userId: string) {
   const supabase = await createClient();
   const profileResult = await supabase
     .from('profiles')
-    .select('id, display_name, first_name, last_name')
+    .select('id, display_name, first_name, last_name, full_name')
     .eq('id', userId)
     .maybeSingle();
 

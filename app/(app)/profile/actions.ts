@@ -63,6 +63,7 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   revalidatePath(routes.profile);
+  revalidatePath(routes.setups);
   revalidatePath('/', 'layout');
   redirect(`${routes.profile}?success=profile_updated`);
 }
@@ -102,5 +103,6 @@ export async function completeRequiredProfileAction(formData: FormData) {
 
   revalidatePath('/', 'layout');
   revalidatePath(routes.profile);
+  revalidatePath(routes.setups);
   redirect(returnTo);
 }

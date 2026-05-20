@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createSetupAction,
   duplicateSetupAction,
+  importSetupSessionAction,
   updateSetupAction,
 } from '@/app/(app)/setups/actions';
 import { DeleteSetupDialog } from '@/components/features/setups/delete-setup-dialog';
+import { ImportSessionForm } from '@/components/features/setups/import-session-form';
 import { RangeField } from '@/components/features/setups/range-field';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -57,6 +59,8 @@ type SetupFormModalProps = {
     tcPowerCut?: number | null;
     tcSlipAngle?: number | null;
     bestLapMs?: number | null;
+    preferredDriverNames?: string[];
+    importedSessionHashes?: string[];
   };
 };
 
@@ -73,7 +77,9 @@ type EditSetupModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
+  importedSessionHashes: string[];
   setup: SetupSummary;
+  preferredDriverName?: string;
   triggerClassName?: string;
 };
 
@@ -542,6 +548,25 @@ function SetupFormModal({
                 <Button type="submit">{isDuplicateMode ? 'Guardar copia' : submitLabel}</Button>
               </div>
             </form>
+
+            {defaultValues?.setupId && !isDuplicateMode ? (
+              <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-sm font-semibold text-white">Importar sesión XML</p>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Vincula una sesión real a este setup. Si no encontramos tu piloto automáticamente,
+                  podrás elegir el nombre a importar.
+                </p>
+                <div className="mt-4">
+                  <ImportSessionForm
+                    action={importSetupSessionAction}
+                    setupId={defaultValues.setupId}
+                    importedSessionHashes={defaultValues.importedSessionHashes ?? []}
+                    preferredDriverNames={defaultValues.preferredDriverNames ?? []}
+                    returnTo={defaultValues.returnTo ?? routes.setups}
+                  />
+                </div>
+              </section>
+            ) : null}
           </div>
         </Modal>
       ) : null}
@@ -587,7 +612,9 @@ export function EditSetupModal({
   cars,
   tracks,
   defaultCarClassId,
+  importedSessionHashes,
   setup,
+  preferredDriverName,
   triggerClassName,
 }: EditSetupModalProps) {
   return (
@@ -620,6 +647,8 @@ export function EditSetupModal({
         tcPowerCut: setup.tcPowerCut,
         tcSlipAngle: setup.tcSlipAngle,
         bestLapMs: setup.bestLapMs,
+        importedSessionHashes,
+        preferredDriverNames: preferredDriverName ? [preferredDriverName] : [],
       }}
       trigger={
         <button
