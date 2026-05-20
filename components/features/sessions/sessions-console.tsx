@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CreateSessionModal } from '@/components/features/sessions/create-session-modal';
 import { EmptyState } from '@/components/shared/empty-state';
 import { routes } from '@/lib/constants/routes';
@@ -78,6 +78,7 @@ export function SessionsConsole({
 }: SessionsConsoleProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     sessions[0]?.id ?? null,
   );
@@ -136,6 +137,11 @@ export function SessionsConsole({
     feedbackMessage && dismissedFeedbackMessage !== feedbackMessage ? feedbackMessage : undefined;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentHref = useMemo(() => {
+    const search = searchParams.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+
   useEffect(() => {
     if (!feedbackMessage) {
       return undefined;
@@ -148,23 +154,35 @@ export function SessionsConsole({
     return () => window.clearTimeout(timeoutId);
   }, [feedbackMessage]);
 
-  function buildSessionsPageHref(nextPage: number, nextFilters: SessionConsoleFilters = filters) {
-    const params = new URLSearchParams();
+  const buildSessionsPageHref = useCallback(
+    (nextPage: number, nextFilters: SessionConsoleFilters = filters) => {
+      const params = new URLSearchParams();
 
-    if (nextFilters.carClassId && nextFilters.carClassId !== defaultCarClassId) {
-      params.set('carClassId', nextFilters.carClassId);
-    }
-    if (nextFilters.carId) params.set('carId', nextFilters.carId);
-    if (nextFilters.trackId) params.set('trackId', nextFilters.trackId);
-    if (nextPage > 1) params.set('page', String(nextPage));
+      if (nextFilters.carClassId && nextFilters.carClassId !== defaultCarClassId) {
+        params.set('carClassId', nextFilters.carClassId);
+      }
+      if (nextFilters.carId) params.set('carId', nextFilters.carId);
+      if (nextFilters.trackId) params.set('trackId', nextFilters.trackId);
+      if (nextPage > 1) params.set('page', String(nextPage));
 
-    const search = params.toString();
-    return search ? `${pathname}?${search}` : pathname;
-  }
+      const search = params.toString();
+      return search ? `${pathname}?${search}` : pathname;
+    },
+    [defaultCarClassId, filters, pathname],
+  );
 
-  function applyFilters(nextFilters: SessionConsoleFilters) {
-    router.push(buildSessionsPageHref(1, nextFilters));
-  }
+  const applyFilters = useCallback(
+    (nextFilters: SessionConsoleFilters) => {
+      const nextHref = buildSessionsPageHref(1, nextFilters);
+
+      if (nextHref === currentHref) {
+        return;
+      }
+
+      router.push(nextHref);
+    },
+    [buildSessionsPageHref, currentHref, router],
+  );
 
   function clearSingleFilter(key: keyof SessionConsoleFilters) {
     const nextFilters = {
