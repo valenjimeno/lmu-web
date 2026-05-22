@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime, formatRaceDurationMinutes } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
-import { getCurrentUser } from '@/lib/supabase/auth';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getSessionDetail } from '@/services/session.service';
 import LoadingSessionDetail from './loading';
 
@@ -122,13 +122,13 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 }
 
 async function SessionDetailContent({ params }: SessionDetailPageProps) {
-  const [user, resolvedParams] = await Promise.all([getCurrentUser(), params]);
+  const [appContext, resolvedParams] = await Promise.all([getAuthenticatedAppContext(), params]);
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
 
-  const session = await getSessionDetail(user.id, resolvedParams.sessionId);
+  const session = await getSessionDetail(appContext.user.id, resolvedParams.sessionId);
 
   if (!session) {
     notFound();

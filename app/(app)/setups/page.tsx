@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
 import { SetupsConsole } from '@/components/features/setups/setups-console';
 import { routes } from '@/lib/constants/routes';
-import { getCurrentUser } from '@/lib/supabase/auth';
-import { getProfilePageData } from '@/services/profile.service';
-import { getImportedSessionHashes } from '@/services/session.service';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getSetupPageData } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
 
@@ -42,28 +40,14 @@ const errorMessages: Record<string, string> = {
 const SETUPS_PAGE_SIZE = 6;
 
 export default async function SetupsPage({ searchParams }: SetupsPageProps) {
-  const [user, resolvedSearchParams] = await Promise.all([getCurrentUser(), searchParams]);
+  const [appContext, resolvedSearchParams] = await Promise.all([
+    getAuthenticatedAppContext(),
+    searchParams,
+  ]);
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
-
-  const [profilePageData, importedSessionHashes] = await Promise.all([
-    getProfilePageData(user.id),
-    getImportedSessionHashes(user.id),
-  ]);
-  const splitProfileFullName =
-    profilePageData.profile?.firstName?.trim() && profilePageData.profile?.lastName?.trim()
-      ? `${profilePageData.profile.firstName.trim()} ${profilePageData.profile.lastName.trim()}`
-      : undefined;
-  const storedProfileFullName = profilePageData.profile?.fullName?.trim() || undefined;
-  const metadataFullName =
-    typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()
-      ? user.user_metadata.full_name.trim()
-      : typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim()
-        ? user.user_metadata.name.trim()
-        : undefined;
-  const preferredDriverName = splitProfileFullName ?? storedProfileFullName ?? metadataFullName;
 
   const filters = {
     query: resolvedSearchParams.query?.trim() || undefined,
@@ -88,7 +72,7 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
     pageSize,
     resolvedFilters,
     defaultCarClassId,
-  } = await getSetupPageData(user.id, filters, {
+  } = await getSetupPageData(appContext.user.id, filters, {
     page: currentPage,
     pageSize: SETUPS_PAGE_SIZE,
   });
@@ -124,8 +108,7 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
       pageSize={pageSize}
       feedbackMessage={feedbackMessageWithDebug}
       feedbackTone={feedbackTone}
-      importedSessionHashes={importedSessionHashes}
-      preferredDriverName={preferredDriverName}
+      preferredDriverName={appContext.preferredDriverName}
     />
   );
 }

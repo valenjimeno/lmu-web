@@ -42,7 +42,6 @@ type SessionsConsoleProps = {
   pageSize: number;
   feedbackMessage?: string;
   feedbackTone?: string;
-  importedSessionHashes: string[];
   preferredDriverName?: string;
   importJobs: SessionImportJobSummary[];
 };
@@ -119,7 +118,6 @@ export function SessionsConsole({
   pageSize,
   feedbackMessage,
   feedbackTone,
-  importedSessionHashes,
   preferredDriverName,
   importJobs,
 }: SessionsConsoleProps) {
@@ -450,7 +448,6 @@ export function SessionsConsole({
               <span className="text-sm text-muted">{totalCount} sesiones</span>
             </div>
             <CreateSessionModal
-              importedSessionHashes={importedSessionHashes}
               preferredDriverName={preferredDriverName}
               onJobCreated={(job) => {
                 setPolledSessionImportJobs((currentJobs) => [

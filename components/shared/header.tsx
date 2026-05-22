@@ -14,6 +14,10 @@ export function Header() {
       (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
     );
 
+    if (pathname === routes.dashboard || pathname.startsWith(`${routes.dashboard}/`)) {
+      return 'Dashboard';
+    }
+
     if (pathname === routes.profile || pathname.startsWith(`${routes.profile}/`)) {
       return 'Perfil';
     }

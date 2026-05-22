@@ -102,6 +102,7 @@ type ImportSetupSessionsBatchInput = {
 
 type ImportSetupSessionOptions = {
   skipDuplicateCheck?: boolean;
+  skipValidationAggregateRefresh?: boolean;
   supabase?: Awaited<ReturnType<typeof createClient>>;
 };
 
@@ -778,6 +779,15 @@ async function updateSetupValidationAggregate(setupId: string) {
   }
 }
 
+function queueSetupValidationAggregateRefresh(setupId: string) {
+  void updateSetupValidationAggregate(setupId).catch((error) => {
+    console.error('setup validation aggregate refresh failed', {
+      setupId,
+      error: serializeSupabaseLikeError(error),
+    });
+  });
+}
+
 function normalizeSessionName(value: string | null | undefined) {
   const normalized = value?.trim() ?? '';
   return normalized.length > 0 ? normalized : null;
@@ -1031,20 +1041,8 @@ async function importSetupSessionInternal(
     }
   }
 
-  if (input.setupId) {
-    try {
-      await updateSetupValidationAggregate(input.setupId);
-    } catch (error) {
-      console.error('setup validation aggregate update failed', {
-        setupId: input.setupId,
-        sessionId: insertedSession.id,
-        driverName: selectedDriver.name,
-        error: serializeSupabaseLikeError(error),
-      });
-      await supabase.from('setup_session_laps').delete().eq('session_id', insertedSession.id);
-      await supabase.from('setup_sessions').delete().eq('id', insertedSession.id);
-      throw error;
-    }
+  if (input.setupId && !options.skipValidationAggregateRefresh) {
+    queueSetupValidationAggregateRefresh(input.setupId);
   }
 
   return {
@@ -1120,10 +1118,15 @@ export async function importSetupSessionsBatch(input: ImportSetupSessionsBatchIn
         },
         {
           skipDuplicateCheck: true,
+          skipValidationAggregateRefresh: true,
           supabase,
         },
       ),
     );
+  }
+
+  if (input.setupId) {
+    queueSetupValidationAggregateRefresh(input.setupId);
   }
 
   return {
@@ -1162,7 +1165,7 @@ export async function deleteSetupSession(input: DeleteSetupSessionInput) {
   }
 
   if (session.setup_id) {
-    await updateSetupValidationAggregate(session.setup_id);
+    queueSetupValidationAggregateRefresh(session.setup_id);
   }
 
   return {

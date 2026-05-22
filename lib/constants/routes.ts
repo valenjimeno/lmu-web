@@ -9,6 +9,12 @@ export const routes = {
 
 export const appNavigationItems = [
   {
+    href: routes.dashboard,
+    label: 'Dashboard',
+    title: 'Dashboard',
+    icon: 'dashboard',
+  },
+  {
     href: routes.profile,
     label: 'Perfil',
     title: 'Perfil',

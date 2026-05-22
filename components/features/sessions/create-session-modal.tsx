@@ -8,14 +8,12 @@ import { routes } from '@/lib/constants/routes';
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 
 type CreateSessionModalProps = {
-  importedSessionHashes: string[];
   preferredDriverName?: string;
   triggerClassName?: string;
   onJobCreated?: (job: SessionImportJobSummary) => void;
 };
 
 export function CreateSessionModal({
-  importedSessionHashes,
   preferredDriverName,
   triggerClassName,
   onJobCreated,
@@ -84,7 +82,6 @@ export function CreateSessionModal({
 
             <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
               <ImportSessionsForm
-                importedSessionHashes={importedSessionHashes}
                 preferredDriverNames={preferredDriverName ? [preferredDriverName] : []}
                 returnTo={routes.sessions}
                 submitLabel="Importar sesiones"

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { SetupComparisonConsole } from '@/components/features/setups/setup-comparison-console';
 import { routes } from '@/lib/constants/routes';
-import { getCurrentUser } from '@/lib/supabase/auth';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getSetupComparisonData } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
 
@@ -15,9 +15,12 @@ type ComparisonPageProps = {
 };
 
 export default async function ComparisonPage({ searchParams }: ComparisonPageProps) {
-  const [user, resolvedSearchParams] = await Promise.all([getCurrentUser(), searchParams]);
+  const [appContext, resolvedSearchParams] = await Promise.all([
+    getAuthenticatedAppContext(),
+    searchParams,
+  ]);
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
 
@@ -32,7 +35,7 @@ export default async function ComparisonPage({ searchParams }: ComparisonPagePro
   };
 
   const { carClasses, cars, tracks, setups, defaultCarClassId, resolvedFilters } =
-    await getSetupComparisonData(user.id, filters);
+    await getSetupComparisonData(appContext.user.id, filters);
   const comparisonKey = JSON.stringify(resolvedFilters);
 
   return (

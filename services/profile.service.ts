@@ -1,4 +1,6 @@
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/auth';
 import type { User } from '@supabase/supabase-js';
 import type { Database } from '@/types/database.types';
 import type { Profile, ProfileCompletion } from '@/types/profile.types';
@@ -47,6 +49,31 @@ function mapProfile(row: ProfileRow | null): Profile | null {
   };
 }
 
+function buildProfileCompletion(profile: Profile | null): ProfileCompletion {
+  return {
+    profile,
+    isComplete: Boolean(
+      profile?.firstName?.trim() && profile?.lastName?.trim() && profile?.nickname?.trim(),
+    ),
+  };
+}
+
+function resolvePreferredDriverName(user: User, profile: Profile | null) {
+  const splitProfileFullName =
+    profile?.firstName?.trim() && profile?.lastName?.trim()
+      ? `${profile.firstName.trim()} ${profile.lastName.trim()}`
+      : undefined;
+  const storedProfileFullName = profile?.fullName?.trim() || undefined;
+  const metadataFullName =
+    typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()
+      ? user.user_metadata.full_name.trim()
+      : typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim()
+        ? user.user_metadata.name.trim()
+        : undefined;
+
+  return splitProfileFullName ?? storedProfileFullName ?? metadataFullName;
+}
+
 export async function getProfilePageData(userId: string) {
   const supabase = await createClient();
   const profileResult = await supabase
@@ -67,19 +94,14 @@ export async function getProfilePageData(userId: string) {
 export async function getProfileCompletion(userId: string): Promise<ProfileCompletion> {
   const { profile } = await getProfilePageData(userId);
 
-  return {
-    profile,
-    isComplete: Boolean(
-      profile?.firstName?.trim() && profile?.lastName?.trim() && profile?.nickname?.trim(),
-    ),
-  };
+  return buildProfileCompletion(profile);
 }
 
 export async function ensureProfileForUser(user: User) {
   const supabase = await createClient();
   const existingProfileResult = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, display_name, first_name, last_name, full_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -88,7 +110,7 @@ export async function ensureProfileForUser(user: User) {
   }
 
   if (existingProfileResult.data) {
-    return;
+    return mapProfile(existingProfileResult.data as ProfileRow);
   }
 
   const rawDisplayName = normalizeNullableText(user.user_metadata?.display_name, 80);
@@ -101,17 +123,44 @@ export async function ensureProfileForUser(user: User) {
   const fullName = rawFullName ?? nickname;
   const { firstName, lastName } = splitFullName(fullName);
 
-  const { error } = await supabase.from('profiles').insert({
-    id: user.id,
-    email: user.email ?? null,
-    display_name: nickname,
-    first_name: firstName,
-    last_name: lastName,
-    full_name: fullName,
-    preferences: {},
-  });
+  const insertResult = await supabase
+    .from('profiles')
+    .insert({
+      id: user.id,
+      email: user.email ?? null,
+      display_name: nickname,
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      preferences: {},
+    })
+    .select('id, display_name, first_name, last_name, full_name')
+    .single();
 
-  if (error) {
-    throw error;
+  if (insertResult.error) {
+    throw insertResult.error;
   }
+
+  return mapProfile(insertResult.data as ProfileRow);
+}
+
+export const getAuthenticatedAppContext = cache(async () => {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const profile = await ensureProfileForUser(user);
+
+  return {
+    user,
+    profile,
+    profileCompletion: buildProfileCompletion(profile),
+    preferredDriverName: resolvePreferredDriverName(user, profile),
+  };
+});
+
+export function buildPreferredDriverNames(...values: Array<string | null | undefined>) {
+  return values.filter((value): value is string => Boolean(value?.trim()));
 }

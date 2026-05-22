@@ -49,8 +49,27 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
   );
 }
 
-function NavIcon({ type }: { type: 'speed' | 'compare' | 'profile' | 'sessions' }) {
+function NavIcon({ type }: { type: 'dashboard' | 'speed' | 'compare' | 'profile' | 'sessions' }) {
   const className = 'h-[18px] w-[18px] shrink-0';
+
+  if (type === 'dashboard') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4.75 12.25h5.5v7h-5.5z" />
+        <path d="M13.75 4.75h5.5v14.5h-5.5z" />
+        <path d="M4.75 4.75h5.5v4h-5.5z" />
+        <path d="M13.75 12.25h5.5v7h-5.5z" />
+      </svg>
+    );
+  }
 
   if (type === 'speed') {
     return (

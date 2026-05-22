@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
 import { SessionsConsole } from '@/components/features/sessions/sessions-console';
 import { routes } from '@/lib/constants/routes';
-import { getCurrentUser } from '@/lib/supabase/auth';
-import { getProfilePageData } from '@/services/profile.service';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getRecentSessionImportJobs } from '@/services/session-import-job.service';
-import { getImportedSessionHashes, getSessionPageData } from '@/services/session.service';
+import { getSessionPageData } from '@/services/session.service';
 
 type SessionsPageProps = {
   searchParams: Promise<{
@@ -35,29 +34,16 @@ const errorMessages: Record<string, string> = {
 };
 
 export default async function SessionsPage({ searchParams }: SessionsPageProps) {
-  const [user, resolvedSearchParams] = await Promise.all([getCurrentUser(), searchParams]);
+  const [appContext, resolvedSearchParams] = await Promise.all([
+    getAuthenticatedAppContext(),
+    searchParams,
+  ]);
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
 
-  const [profilePageData, importedSessionHashes, importJobs] = await Promise.all([
-    getProfilePageData(user.id),
-    getImportedSessionHashes(user.id),
-    getRecentSessionImportJobs(user.id),
-  ]);
-  const splitProfileFullName =
-    profilePageData.profile?.firstName?.trim() && profilePageData.profile?.lastName?.trim()
-      ? `${profilePageData.profile.firstName.trim()} ${profilePageData.profile.lastName.trim()}`
-      : undefined;
-  const storedProfileFullName = profilePageData.profile?.fullName?.trim() || undefined;
-  const metadataFullName =
-    typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()
-      ? user.user_metadata.full_name.trim()
-      : typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim()
-        ? user.user_metadata.name.trim()
-        : undefined;
-  const preferredDriverName = splitProfileFullName ?? storedProfileFullName ?? metadataFullName;
+  const importJobs = await getRecentSessionImportJobs(appContext.user.id);
 
   const currentPage = Math.max(1, Number.parseInt(resolvedSearchParams.page ?? '1', 10) || 1);
   const filters = {
@@ -78,7 +64,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
     resolvedFilters,
     defaultCarClassId,
     defaultSourceSessionSetting,
-  } = await getSessionPageData(user.id, filters, {
+  } = await getSessionPageData(appContext.user.id, filters, {
     page: currentPage,
     pageSize: SESSIONS_PAGE_SIZE,
   });
@@ -120,8 +106,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
       pageSize={pageSize}
       feedbackMessage={feedbackMessageWithDebug}
       feedbackTone={feedbackTone}
-      importedSessionHashes={importedSessionHashes}
-      preferredDriverName={preferredDriverName}
+      preferredDriverName={appContext.preferredDriverName}
       importJobs={importJobs}
     />
   );

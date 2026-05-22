@@ -1,3 +1,4 @@
+import { createPerfTrace } from '@/lib/observability/perf';
 import { createClient } from '@/lib/supabase/server';
 import { getSetupCatalog, type CarOption } from '@/services/catalog.service';
 import { deriveSessionMetrics } from '@/services/session-metrics';
@@ -405,7 +406,7 @@ function buildTextCandidates(...values: Array<string | null | undefined>) {
   return Array.from(candidates);
 }
 
-function matchesCandidateText(
+function _matchesCandidateText(
   value: string | null | undefined,
   candidates: string[],
   minimumSubstringLength = 6,
@@ -437,11 +438,66 @@ function normalizeSessionSetting(value: string | null | undefined) {
   return normalizeText(value);
 }
 
+function applyStandaloneSessionClassFilter<
+  TQuery extends {
+    or: (filters: string) => TQuery;
+    ilike: (column: string, pattern: string) => TQuery;
+  },
+>(query: TQuery, selectedCarClassName: string | null) {
+  const canonicalClass = canonicalizeSessionClass(selectedCarClassName);
+
+  if (canonicalClass === 'lmgt3') {
+    return query.or('car_class.ilike.%LMGT3%,car_class.ilike.%GT3%');
+  }
+
+  if (canonicalClass === 'hypercar') {
+    return query.or('car_class.ilike.%Hypercar%,car_class.ilike.%LMDH%,car_class.ilike.%GTP%');
+  }
+
+  if (selectedCarClassName?.trim()) {
+    return query.ilike('car_class', `%${selectedCarClassName.trim()}%`);
+  }
+
+  return query;
+}
+
+function applyTextCandidateFilter<TQuery extends { or: (filters: string) => TQuery }>(
+  query: TQuery,
+  columns: string[],
+  candidates: string[],
+) {
+  const normalizedCandidates = Array.from(
+    new Set(
+      candidates.map((candidate) => candidate.trim()).filter((candidate) => candidate.length > 0),
+    ),
+  );
+
+  if (normalizedCandidates.length === 0 || columns.length === 0) {
+    return query;
+  }
+
+  const clauses: string[] = [];
+
+  for (const column of columns) {
+    for (const candidate of normalizedCandidates) {
+      clauses.push(`${column}.ilike.%${candidate}%`);
+    }
+  }
+
+  return clauses.length > 0 ? query.or(clauses.join(',')) : query;
+}
+
 export async function getSessionPageData(
   userId: string,
   filters: SessionFilters = {},
   options: GetSessionPageDataOptions = {},
 ) {
+  const trace = createPerfTrace('getSessionPageData', {
+    userId,
+    filters,
+    page: options.page ?? 1,
+    pageSize: options.pageSize ?? 10,
+  });
   const supabase = await createClient();
   const { carClasses, manufacturers, cars, tracks } = await getSetupCatalog();
   const page = Math.max(1, options.page ?? 1);
@@ -462,6 +518,10 @@ export async function getSessionPageData(
   if (sessionSettingsResult.error) {
     throw sessionSettingsResult.error;
   }
+
+  trace.log('session-settings-loaded', {
+    discoveredRows: sessionSettingsResult.data?.length ?? 0,
+  });
 
   const discoveredSessionSettings = Array.from(
     new Set(
@@ -489,6 +549,8 @@ export async function getSessionPageData(
   const selectedCarName = selectedCar?.name ?? null;
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
   const selectedTrackName = selectedTrack?.name ?? null;
+  const selectedSourceSessionSettingNormalized = selectedSourceSessionSetting.trim();
+  const requestedItemCount = Math.max(page * pageSize, pageSize);
 
   let setupsQuery = supabase
     .from('setups')
@@ -519,6 +581,13 @@ export async function getSessionPageData(
     throw setupsResult.error;
   }
 
+  trace.log('scoped-setups-loaded', {
+    setupRows: setupsResult.data?.length ?? 0,
+    selectedCarClassId,
+    selectedCarId,
+    selectedTrackId,
+  });
+
   const scopedSetups = (setupsResult.data ?? []) as SetupLinkRow[];
   const setupsById = new Map(scopedSetups.map((setup) => [setup.id, setup]));
   const carsById = new Map(cars.map((car) => [car.id, car]));
@@ -526,12 +595,6 @@ export async function getSessionPageData(
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
   );
   const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
-  const normalizedSelectedCarClassName = normalizeText(selectedCarClassName);
-  const normalizedSelectedCarName = normalizeText(selectedCarName);
-  const normalizedSelectedTrackName = normalizeText(selectedTrackName);
-  const normalizedSelectedSourceSessionSetting = normalizeSessionSetting(
-    selectedSourceSessionSetting,
-  );
   const selectedCarCandidates = buildTextCandidates(
     selectedCar?.name,
     selectedCar?.slug,
@@ -544,35 +607,107 @@ export async function getSessionPageData(
     selectedTrack?.city,
     selectedTrackName,
   );
-
-  const standaloneSessionsQuery = supabase
+  const sessionListSelect =
+    'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops';
+  let linkedSessionsCountQuery = supabase
     .from('setup_sessions')
-    .select(
-      'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
-    )
+    .select('id', { count: 'planned', head: true })
     .eq('owner_user_id', userId)
-    .is('setup_id', null)
-    .order('imported_at', { ascending: false });
+    .eq('source_session_setting', selectedSourceSessionSettingNormalized);
+  let linkedSessionsDataQuery = supabase
+    .from('setup_sessions')
+    .select(sessionListSelect)
+    .eq('owner_user_id', userId)
+    .eq('source_session_setting', selectedSourceSessionSettingNormalized);
 
-  const linkedSessionsPromise =
-    scopedSetups.length > 0
-      ? supabase
-          .from('setup_sessions')
-          .select(
-            'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
-          )
-          .eq('owner_user_id', userId)
-          .in(
-            'setup_id',
-            scopedSetups.map((setup) => setup.id),
-          )
-          .order('imported_at', { ascending: false })
-      : Promise.resolve({ data: [] as SetupSessionRow[], error: null });
+  if (scopedSetups.length > 0) {
+    const scopedSetupIds = scopedSetups.map((setup) => setup.id);
+    linkedSessionsCountQuery = linkedSessionsCountQuery.in('setup_id', scopedSetupIds);
+    linkedSessionsDataQuery = linkedSessionsDataQuery.in('setup_id', scopedSetupIds);
+  } else {
+    linkedSessionsCountQuery = linkedSessionsCountQuery.in('setup_id', [
+      '00000000-0000-0000-0000-000000000000',
+    ]);
+    linkedSessionsDataQuery = linkedSessionsDataQuery.in('setup_id', [
+      '00000000-0000-0000-0000-000000000000',
+    ]);
+  }
 
-  const [linkedSessionsResult, standaloneSessionsResult] = await Promise.all([
-    linkedSessionsPromise,
-    standaloneSessionsQuery,
+  let standaloneSessionsCountQuery = supabase
+    .from('setup_sessions')
+    .select('id', { count: 'planned', head: true })
+    .eq('owner_user_id', userId)
+    .eq('source_session_setting', selectedSourceSessionSettingNormalized)
+    .is('setup_id', null);
+  let standaloneSessionsDataQuery = supabase
+    .from('setup_sessions')
+    .select(sessionListSelect)
+    .eq('owner_user_id', userId)
+    .eq('source_session_setting', selectedSourceSessionSettingNormalized)
+    .is('setup_id', null);
+
+  if (selectedCarClassId) {
+    standaloneSessionsCountQuery = applyStandaloneSessionClassFilter(
+      standaloneSessionsCountQuery,
+      selectedCarClassName,
+    );
+    standaloneSessionsDataQuery = applyStandaloneSessionClassFilter(
+      standaloneSessionsDataQuery,
+      selectedCarClassName,
+    );
+  }
+
+  if (selectedCarId) {
+    standaloneSessionsCountQuery = applyTextCandidateFilter(
+      standaloneSessionsCountQuery,
+      ['car_type'],
+      selectedCarCandidates,
+    );
+    standaloneSessionsDataQuery = applyTextCandidateFilter(
+      standaloneSessionsDataQuery,
+      ['car_type'],
+      selectedCarCandidates,
+    );
+  }
+
+  if (selectedTrackId) {
+    standaloneSessionsCountQuery = applyTextCandidateFilter(
+      standaloneSessionsCountQuery,
+      ['track_venue', 'track_course'],
+      selectedTrackCandidates,
+    );
+    standaloneSessionsDataQuery = applyTextCandidateFilter(
+      standaloneSessionsDataQuery,
+      ['track_venue', 'track_course'],
+      selectedTrackCandidates,
+    );
+  }
+
+  const [
+    linkedSessionsCountResult,
+    standaloneSessionsCountResult,
+    linkedSessionsResult,
+    standaloneSessionsResult,
+  ] = await Promise.all([
+    linkedSessionsCountQuery,
+    standaloneSessionsCountQuery,
+    linkedSessionsDataQuery
+      .order('session_datetime', { ascending: false, nullsFirst: false })
+      .order('imported_at', { ascending: false })
+      .range(0, requestedItemCount - 1),
+    standaloneSessionsDataQuery
+      .order('session_datetime', { ascending: false, nullsFirst: false })
+      .order('imported_at', { ascending: false })
+      .range(0, requestedItemCount - 1),
   ]);
+
+  if (linkedSessionsCountResult.error) {
+    throw linkedSessionsCountResult.error;
+  }
+
+  if (standaloneSessionsCountResult.error) {
+    throw standaloneSessionsCountResult.error;
+  }
 
   if (linkedSessionsResult.error) {
     throw linkedSessionsResult.error;
@@ -591,96 +726,29 @@ export async function getSessionPageData(
 
     return rightTimestamp - leftTimestamp;
   });
-  const rawSessionsById = new Map(rawSessions.map((session) => [session.id, session]));
-  const filteredSessions = rawSessions
-    .map((session) =>
-      buildSessionSummary(
-        session,
-        session.setup_id ? setupsById.get(session.setup_id) : undefined,
-        carsById,
-        tracksById,
-        manufacturersById,
-      ),
-    )
-    .filter((session) => {
-      if (
-        normalizedSelectedSourceSessionSetting &&
-        normalizeSessionSetting(session.sourceSessionSetting) !==
-          normalizedSelectedSourceSessionSetting
-      ) {
-        return false;
-      }
-
-      if (selectedCarClassId) {
-        const sessionCarClassName = canonicalizeSessionClass(
-          session.carClassId
-            ? carClasses.find((carClass) => carClass.id === session.carClassId)?.name
-            : null,
-        );
-        const inferredSessionCarClassName = canonicalizeSessionClass(
-          rawSessionsById.get(session.id)?.car_class,
-        );
-
-        if (
-          session.carClassId !== selectedCarClassId &&
-          inferredSessionCarClassName !==
-            canonicalizeSessionClass(normalizedSelectedCarClassName) &&
-          sessionCarClassName !== canonicalizeSessionClass(normalizedSelectedCarClassName)
-        ) {
-          return false;
-        }
-      }
-
-      if (selectedCarId) {
-        const normalizedSessionCarName = normalizeText(session.carName);
-        const rawSession = rawSessionsById.get(session.id);
-
-        if (
-          session.carId !== selectedCarId &&
-          normalizedSessionCarName !== normalizedSelectedCarName &&
-          !matchesCandidateText(session.carName, selectedCarCandidates) &&
-          !matchesCandidateText(rawSession?.car_type, selectedCarCandidates)
-        ) {
-          return false;
-        }
-      }
-
-      if (selectedTrackId) {
-        const normalizedSessionTrackName = normalizeText(session.trackName);
-        const rawSession = rawSessionsById.get(session.id);
-
-        if (
-          session.trackId !== selectedTrackId &&
-          normalizedSessionTrackName !== normalizedSelectedTrackName &&
-          !matchesCandidateText(session.trackName, selectedTrackCandidates) &&
-          !matchesCandidateText(rawSession?.track_venue, selectedTrackCandidates) &&
-          !matchesCandidateText(rawSession?.track_course, selectedTrackCandidates)
-        ) {
-          return false;
-        }
-      }
-
-      return true;
-    })
-    .sort((left, right) => {
-      const rightTimestamp = Date.parse(right.sessionDateTime ?? right.importedAt);
-      const leftTimestamp = Date.parse(left.sessionDateTime ?? left.importedAt);
-
-      return rightTimestamp - leftTimestamp;
-    });
-
-  const totalCount = filteredSessions.length;
+  const totalCount =
+    (linkedSessionsCountResult.count ?? 0) + (standaloneSessionsCountResult.count ?? 0);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const safePage = Math.min(page, totalPages);
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize;
 
-  return {
+  const response = {
     carClasses,
     cars,
     tracks,
     sessionSettings,
-    sessions: filteredSessions.slice(from, to),
+    sessions: rawSessions
+      .slice(from, to)
+      .map((session) =>
+        buildSessionSummary(
+          session,
+          session.setup_id ? setupsById.get(session.setup_id) : undefined,
+          carsById,
+          tracksById,
+          manufacturersById,
+        ),
+      ),
     totalCount,
     page: safePage,
     pageSize,
@@ -693,6 +761,18 @@ export async function getSessionPageData(
     defaultCarClassId,
     defaultSourceSessionSetting,
   };
+
+  trace.finish({
+    linkedRows: linkedSessionsResult.data?.length ?? 0,
+    standaloneRows: standaloneSessionsResult.data?.length ?? 0,
+    mergedRows: rawSessions.length,
+    totalCount,
+    returnedRows: response.sessions.length,
+    safePage,
+    requestedItemCount,
+  });
+
+  return response;
 }
 
 export async function getImportedSessionHashes(userId: string) {
@@ -713,6 +793,7 @@ export async function getImportedSessionHashes(userId: string) {
 }
 
 export async function getSessionDetail(userId: string, sessionId: string) {
+  const trace = createPerfTrace('getSessionDetail', { userId, sessionId });
   const supabase = await createClient();
   const { manufacturers, cars, tracks } = await getSetupCatalog();
 
@@ -732,6 +813,15 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       .maybeSingle();
   }
 
+  if (sessionResult.error) {
+    throw sessionResult.error;
+  }
+
+  if (!sessionResult.data) {
+    trace.finish({ found: false });
+    return null;
+  }
+
   const [lapsResult, linkedSetupResult] = await Promise.all([
     supabase
       .from('setup_session_laps')
@@ -740,12 +830,15 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       )
       .eq('session_id', sessionId)
       .order('lap_number', { ascending: true }),
-    supabase.from('setups').select('id, name, car_id, track_id').eq('owner_user_id', userId),
+    sessionResult.data.setup_id
+      ? supabase
+          .from('setups')
+          .select('id, name, car_id, track_id')
+          .eq('owner_user_id', userId)
+          .eq('id', sessionResult.data.setup_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
-
-  if (sessionResult.error) {
-    throw sessionResult.error;
-  }
 
   if (lapsResult.error) {
     throw lapsResult.error;
@@ -755,16 +848,9 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     throw linkedSetupResult.error;
   }
 
-  if (!sessionResult.data) {
-    return null;
-  }
-
   const session = sessionResult.data as SetupSessionDetailRow;
   const laps = (lapsResult.data ?? []) as SetupSessionLapRow[];
-  const linkedSetups = (linkedSetupResult.data ?? []) as SetupLinkRow[];
-  const setup = session.setup_id
-    ? linkedSetups.find((candidate) => candidate.id === session.setup_id)
-    : undefined;
+  const setup = linkedSetupResult.data ? (linkedSetupResult.data as SetupLinkRow) : undefined;
   const carsById = new Map(cars.map((car) => [car.id, car]));
   const manufacturersById = new Map(
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
@@ -797,7 +883,7 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     },
   );
 
-  return {
+  const detail = {
     ...identity,
     sessionType: session.session_type,
     serverName: session.server_name,
@@ -876,4 +962,13 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       isValidLap: lap.is_valid_lap,
     })),
   } satisfies SessionDetail;
+
+  trace.finish({
+    found: true,
+    lapRows: laps.length,
+    validLapRows: validLaps.length,
+    hasSetup: Boolean(setup),
+  });
+
+  return detail;
 }

@@ -55,7 +55,6 @@ type SetupsConsoleProps = {
   pageSize: number;
   feedbackMessage?: string;
   feedbackTone?: string;
-  importedSessionHashes: string[];
   preferredDriverName?: string;
 };
 
@@ -71,7 +70,6 @@ export function SetupsConsole({
   pageSize,
   feedbackMessage,
   feedbackTone,
-  importedSessionHashes,
   preferredDriverName,
 }: SetupsConsoleProps) {
   const router = useRouter();
@@ -720,7 +718,6 @@ export function SetupsConsole({
             cars={cars}
             tracks={tracks}
             defaultCarClassId={defaultCarClassId}
-            importedSessionHashes={importedSessionHashes}
             preferredDriverName={preferredDriverName}
             onClose={undefined}
           />
@@ -744,7 +741,6 @@ export function SetupsConsole({
                     cars={cars}
                     tracks={tracks}
                     defaultCarClassId={defaultCarClassId}
-                    importedSessionHashes={importedSessionHashes}
                     preferredDriverName={preferredDriverName}
                     onClose={() => setMobileInsightsOpen(false)}
                     mobile
@@ -773,7 +769,6 @@ function InsightsPanel({
   cars,
   tracks,
   defaultCarClassId,
-  importedSessionHashes,
   preferredDriverName,
   onClose,
   mobile = false,
@@ -783,7 +778,6 @@ function InsightsPanel({
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
-  importedSessionHashes: string[];
   preferredDriverName?: string;
   onClose?: () => void;
   mobile?: boolean;
@@ -872,7 +866,6 @@ function InsightsPanel({
               cars={cars}
               tracks={tracks}
               defaultCarClassId={defaultCarClassId}
-              importedSessionHashes={importedSessionHashes}
               setup={setup}
               preferredDriverName={preferredDriverName}
               triggerClassName="inline-flex min-h-11 w-full items-center justify-center rounded-[0.95rem] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/82 transition hover:bg-white/[0.08]"

@@ -4,8 +4,7 @@ import { CompleteProfileModal } from '@/components/features/profile/complete-pro
 import { Header } from '@/components/shared/header';
 import { Sidebar } from '@/components/shared/sidebar';
 import { routes } from '@/lib/constants/routes';
-import { getCurrentUser } from '@/lib/supabase/auth';
-import { ensureProfileForUser, getProfileCompletion } from '@/services/profile.service';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 
 export default function AppLayout({
   children,
@@ -24,14 +23,11 @@ async function AuthenticatedAppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
+  const appContext = await getAuthenticatedAppContext();
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
-
-  await ensureProfileForUser(user);
-  const profileCompletion = await getProfileCompletion(user.id);
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -42,8 +38,8 @@ async function AuthenticatedAppLayout({
           <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:pb-7">{children}</div>
         </div>
       </div>
-      {profileCompletion.isComplete ? null : (
-        <CompleteProfileModal profile={profileCompletion.profile} />
+      {appContext.profileCompletion.isComplete ? null : (
+        <CompleteProfileModal profile={appContext.profileCompletion.profile} />
       )}
     </div>
   );

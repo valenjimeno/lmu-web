@@ -26,8 +26,7 @@ import {
   formatSetupVisibility,
 } from '@/lib/utils/setup-formatters';
 import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
-import { getCurrentUser } from '@/lib/supabase/auth';
-import { getProfilePageData } from '@/services/profile.service';
+import { getAuthenticatedAppContext, buildPreferredDriverNames } from '@/services/profile.service';
 import { getSetupDetail } from '@/services/setup.service';
 import LoadingSetupDetail from './loading';
 
@@ -76,20 +75,17 @@ export default function SetupDetailPage({ params, searchParams }: SetupDetailPag
 }
 
 async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps) {
-  const [user, resolvedParams, resolvedSearchParams] = await Promise.all([
-    getCurrentUser(),
+  const [appContext, resolvedParams, resolvedSearchParams] = await Promise.all([
+    getAuthenticatedAppContext(),
     params,
     searchParams,
   ]);
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
 
-  const [setup, profilePageData] = await Promise.all([
-    getSetupDetail(user.id, resolvedParams.setupId),
-    getProfilePageData(user.id),
-  ]);
+  const setup = await getSetupDetail(appContext.user.id, resolvedParams.setupId);
 
   if (!setup) {
     notFound();
@@ -111,13 +107,11 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
   const feedbackTone = resolvedSearchParams.error ? 'text-[#f3b4aa]' : 'text-[#edd1a3]';
   const detailPath = `${routes.setups}/${setup.id}`;
   const favoriteReturnTo = isEditMode ? `${detailPath}?edit=1` : detailPath;
-  const preferredDriverNames = [
-    profilePageData.profile?.firstName && profilePageData.profile?.lastName
-      ? `${profilePageData.profile.firstName} ${profilePageData.profile.lastName}`
-      : null,
-    profilePageData.profile?.nickname ?? null,
+  const preferredDriverNames = buildPreferredDriverNames(
+    appContext.preferredDriverName,
+    appContext.profile?.nickname,
     setup.ownerDisplayName,
-  ].filter((value): value is string => Boolean(value?.trim()));
+  );
 
   return (
     <section className="space-y-6">
@@ -206,7 +200,6 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                 <ImportSessionForm
                   action={importSetupSessionAction}
                   setupId={setup.id}
-                  importedSessionHashes={[]}
                   preferredDriverNames={preferredDriverNames}
                 />
               </div>

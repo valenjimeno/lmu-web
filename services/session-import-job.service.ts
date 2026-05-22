@@ -1,3 +1,4 @@
+import { createPerfTrace } from '@/lib/observability/perf';
 import { createClient } from '@/lib/supabase/server';
 import {
   detectSessionTypeFromXml,
@@ -44,6 +45,16 @@ type DrainSessionImportJobInput = {
   jobId: string;
   chunkSize?: number;
   maxIterations?: number;
+};
+
+type SessionImportJobCounterDelta = {
+  queuedCount: number;
+  processingCount: number;
+  completedCount: number;
+  failedCount: number;
+  duplicateCount: number;
+  invalidCount: number;
+  filteredCount: number;
 };
 
 export type SessionImportJobSummary = {
@@ -218,6 +229,90 @@ function isSessionImportJobStale(job: SessionImportJobRow) {
   return Date.now() - activityTimestamp >= STALE_SESSION_IMPORT_JOB_THRESHOLD_MS;
 }
 
+function createEmptySessionImportJobCounterDelta(): SessionImportJobCounterDelta {
+  return {
+    queuedCount: 0,
+    processingCount: 0,
+    completedCount: 0,
+    failedCount: 0,
+    duplicateCount: 0,
+    invalidCount: 0,
+    filteredCount: 0,
+  };
+}
+
+function applySessionImportJobCounterDelta(
+  job: SessionImportJobRow,
+  delta: SessionImportJobCounterDelta,
+) {
+  const queuedCount = Math.max(0, job.queued_count + delta.queuedCount);
+  const processingCount = Math.max(0, job.processing_count + delta.processingCount);
+  const completedCount = Math.max(0, job.completed_count + delta.completedCount);
+  const failedCount = Math.max(0, job.failed_count + delta.failedCount);
+  const duplicateCount = Math.max(0, job.duplicate_count + delta.duplicateCount);
+  const invalidCount = Math.max(0, job.invalid_count + delta.invalidCount);
+  const filteredCount = Math.max(0, job.filtered_count + delta.filteredCount);
+  const isFinished = queuedCount === 0 && processingCount === 0;
+  const nextStatus: SessionImportJobRow['status'] =
+    isFinished && completedCount === 0 && failedCount > 0
+      ? 'failed'
+      : isFinished
+        ? 'completed'
+        : completedCount > 0 || processingCount > 0
+          ? 'processing'
+          : 'queued';
+  const startedAt =
+    job.started_at ?? (nextStatus === 'processing' || isFinished ? new Date().toISOString() : null);
+  const completedAt = isFinished ? new Date().toISOString() : null;
+
+  const updatedJob: SessionImportJobRow = {
+    ...job,
+    status: nextStatus,
+    queued_count: queuedCount,
+    processing_count: processingCount,
+    completed_count: completedCount,
+    failed_count: failedCount,
+    duplicate_count: duplicateCount,
+    invalid_count: invalidCount,
+    filtered_count: filteredCount,
+    started_at: startedAt,
+    completed_at: completedAt,
+    notification_status: isFinished ? 'ready' : 'pending',
+  };
+
+  return updatedJob;
+}
+
+async function persistSessionImportJobCounters(job: SessionImportJobRow) {
+  const supabase = await createClient();
+  const updateResult = await supabase
+    .from('session_import_jobs')
+    .update({
+      status: job.status,
+      queued_count: job.queued_count,
+      processing_count: job.processing_count,
+      completed_count: job.completed_count,
+      failed_count: job.failed_count,
+      duplicate_count: job.duplicate_count,
+      invalid_count: job.invalid_count,
+      filtered_count: job.filtered_count,
+      started_at: job.started_at,
+      completed_at: job.completed_at,
+      notification_status: job.notification_status,
+      notification_payload: buildNotificationPayload(job),
+    })
+    .eq('owner_user_id', job.owner_user_id)
+    .eq('id', job.id)
+    .select(sessionImportJobSelect)
+    .single();
+
+  if (updateResult.error) {
+    throw updateResult.error;
+  }
+
+  return updateResult.data as SessionImportJobRow;
+}
+
 async function refreshSessionImportJobCounters(ownerUserId: string, jobId: string) {
   const supabase = await createClient();
   const [jobResult, itemsResult] = await Promise.all([
@@ -295,12 +390,12 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
       ? 'failed'
       : isFinished
         ? 'completed'
-        : completedCount > 0
+        : completedCount > 0 || processingCount > 0
           ? 'processing'
           : 'queued';
 
-  const updatedValues: SessionImportJobInsert = {
-    owner_user_id: ownerUserId,
+  const refreshedJob = await persistSessionImportJobCounters({
+    ...job,
     status: nextStatus,
     queued_count: queuedCount,
     processing_count: processingCount,
@@ -314,36 +409,9 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
       (nextStatus === 'processing' || isFinished ? new Date().toISOString() : null),
     completed_at: isFinished ? new Date().toISOString() : null,
     notification_status: isFinished ? 'ready' : 'pending',
-  };
+  });
 
-  const updateResult = await supabase
-    .from('session_import_jobs')
-    .update(updatedValues)
-    .eq('owner_user_id', ownerUserId)
-    .eq('id', jobId)
-    .select(sessionImportJobSelect)
-    .single();
-
-  if (updateResult.error) {
-    throw updateResult.error;
-  }
-
-  const refreshedJob = updateResult.data as SessionImportJobRow;
-  const payloadUpdate = await supabase
-    .from('session_import_jobs')
-    .update({
-      notification_payload: buildNotificationPayload(refreshedJob),
-    })
-    .eq('owner_user_id', ownerUserId)
-    .eq('id', jobId)
-    .select(sessionImportJobSelect)
-    .single();
-
-  if (payloadUpdate.error) {
-    throw payloadUpdate.error;
-  }
-
-  return mapJobRowToSummary(payloadUpdate.data as SessionImportJobRow);
+  return mapJobRowToSummary(refreshedJob);
 }
 
 export async function createSessionImportJob(input: CreateSessionImportJobInput) {
@@ -435,6 +503,11 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
 }
 
 export async function processSessionImportJob(input: ProcessSessionImportJobInput) {
+  const trace = createPerfTrace('processSessionImportJob', {
+    ownerUserId: input.ownerUserId,
+    jobId: input.jobId,
+    chunkSize: input.chunkSize ?? 4,
+  });
   const chunkSize = Math.max(1, Math.min(input.chunkSize ?? 4, 10));
   const supabase = await createClient();
   const job = await getSessionImportJobRow(input.ownerUserId, input.jobId);
@@ -444,6 +517,11 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
   }
 
   if (job.status === 'completed' || job.status === 'failed') {
+    trace.finish({
+      skipped: true,
+      status: job.status,
+      processedCount: 0,
+    });
     return {
       job: mapJobRowToSummary(job),
       processedCount: 0,
@@ -468,8 +546,19 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
   const items = itemsResult.data ?? [];
 
+  trace.log('queued-items-loaded', {
+    itemCount: items.length,
+    status: job.status,
+  });
+
   if (items.length === 0) {
     const refreshedJob = await refreshSessionImportJobCounters(input.ownerUserId, input.jobId);
+    trace.finish({
+      processedCount: 0,
+      queuedRemaining: refreshedJob.queuedCount,
+      status: refreshedJob.status,
+      usedReconciliation: true,
+    });
     return {
       job: refreshedJob,
       processedCount: 0,
@@ -479,6 +568,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
   const itemIds = items.map((item) => item.id);
   const now = new Date().toISOString();
+  const counterDelta = createEmptySessionImportJobCounterDelta();
 
   const markProcessingResult = await supabase
     .from('session_import_job_items')
@@ -493,14 +583,21 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
     throw markProcessingResult.error;
   }
 
-  await supabase
-    .from('session_import_jobs')
-    .update({
-      status: 'processing',
-      started_at: job.started_at ?? now,
-    })
-    .eq('owner_user_id', input.ownerUserId)
-    .eq('id', input.jobId);
+  counterDelta.queuedCount -= items.length;
+  counterDelta.processingCount += items.length;
+
+  let currentJob = await persistSessionImportJobCounters(
+    applySessionImportJobCounterDelta(
+      {
+        ...job,
+        started_at: job.started_at ?? now,
+      },
+      counterDelta,
+    ),
+  );
+
+  counterDelta.queuedCount = 0;
+  counterDelta.processingCount = 0;
 
   for (const item of items) {
     try {
@@ -536,6 +633,10 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
           throw filteredResult.error;
         }
 
+        counterDelta.processingCount -= 1;
+        counterDelta.failedCount += 1;
+        counterDelta.filteredCount += 1;
+
         await cleanupSessionImportSource({
           storageBucket: item.storage_bucket,
           storagePath: item.storage_path,
@@ -569,6 +670,9 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
         throw completeResult.error;
       }
 
+      counterDelta.processingCount -= 1;
+      counterDelta.completedCount += 1;
+
       await cleanupSessionImportSource({
         storageBucket: item.storage_bucket,
         storagePath: item.storage_path,
@@ -593,6 +697,17 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
         throw failedResult.error;
       }
 
+      counterDelta.processingCount -= 1;
+      counterDelta.failedCount += 1;
+
+      if (errorCode === 'duplicate_session') {
+        counterDelta.duplicateCount += 1;
+      } else if (errorCode === 'filtered_session_type') {
+        counterDelta.filteredCount += 1;
+      } else if (invalidImportErrorCodes.has(errorCode)) {
+        counterDelta.invalidCount += 1;
+      }
+
       if (terminalImportErrorCodes.has(errorCode)) {
         await cleanupSessionImportSource({
           storageBucket: item.storage_bucket,
@@ -602,7 +717,21 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
     }
   }
 
-  const refreshedJob = await refreshSessionImportJobCounters(input.ownerUserId, input.jobId);
+  currentJob = await persistSessionImportJobCounters(
+    applySessionImportJobCounterDelta(currentJob, counterDelta),
+  );
+  const refreshedJob = mapJobRowToSummary(currentJob);
+
+  trace.finish({
+    processedCount: items.length,
+    completedDelta: counterDelta.completedCount,
+    failedDelta: counterDelta.failedCount,
+    duplicateDelta: counterDelta.duplicateCount,
+    invalidDelta: counterDelta.invalidCount,
+    filteredDelta: counterDelta.filteredCount,
+    queuedRemaining: refreshedJob.queuedCount,
+    status: refreshedJob.status,
+  });
 
   return {
     job: refreshedJob,
@@ -612,6 +741,12 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 }
 
 export async function drainSessionImportJob(input: DrainSessionImportJobInput) {
+  const trace = createPerfTrace('drainSessionImportJob', {
+    ownerUserId: input.ownerUserId,
+    jobId: input.jobId,
+    chunkSize: input.chunkSize ?? 4,
+    maxIterations: input.maxIterations ?? 25,
+  });
   const maxIterations = Math.max(1, Math.min(input.maxIterations ?? 25, 100));
   let lastResult: {
     job: SessionImportJobSummary;
@@ -627,9 +762,23 @@ export async function drainSessionImportJob(input: DrainSessionImportJobInput) {
     });
 
     if (!lastResult.hasMoreWork) {
+      trace.finish({
+        iterations: iteration + 1,
+        processedCount: lastResult.processedCount,
+        finalStatus: lastResult.job.status,
+        queuedRemaining: lastResult.job.queuedCount,
+      });
       return lastResult;
     }
   }
+
+  trace.finish({
+    iterations: maxIterations,
+    processedCount: lastResult?.processedCount ?? 0,
+    finalStatus: lastResult?.job.status ?? null,
+    queuedRemaining: lastResult?.job.queuedCount ?? null,
+    maxIterationsReached: true,
+  });
 
   return lastResult;
 }

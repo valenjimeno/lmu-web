@@ -21,7 +21,6 @@ import {
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 
 type ImportSessionsFormProps = {
-  importedSessionHashes: string[];
   preferredDriverNames: string[];
   returnTo?: string;
   submitLabel?: string;
@@ -40,7 +39,7 @@ type SessionImportEntry = {
   selectedDriverName: string;
   sessionType: string | null;
   matchState: MatchState;
-  duplicateReason: 'already-imported' | 'selected-more-than-once' | null;
+  duplicateReason: 'selected-more-than-once' | null;
 };
 
 type UploadedSessionImportSource = {
@@ -202,13 +201,6 @@ function ImportSessionsFormBody({
         </div>
       ) : null}
 
-      {entries.some((entry) => entry.duplicateReason === 'already-imported') ? (
-        <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
-          Hay XML que ya estaban importados anteriormente. Esos duplicados bloquean el envío del
-          lote hasta que cambies la selección de ficheros.
-        </div>
-      ) : null}
-
       {entries.some((entry) => entry.duplicateReason === 'selected-more-than-once') ? (
         <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
           Has seleccionado el mismo XML más de una vez dentro del lote. Vuelve a abrir el selector y
@@ -273,10 +265,7 @@ function chunkEntries<T>(entries: T[], chunkSize: number) {
   return chunks;
 }
 
-function applyDuplicateFlags(
-  entries: SessionImportEntry[],
-  importedSessionHashSet: ReadonlySet<string>,
-): SessionImportEntry[] {
+function applyDuplicateFlags(entries: SessionImportEntry[]): SessionImportEntry[] {
   const hashCounts = new Map<string, number>();
 
   for (const entry of entries) {
@@ -284,16 +273,11 @@ function applyDuplicateFlags(
   }
 
   return entries.map((entry) => {
-    const isAlreadyImported = importedSessionHashSet.has(entry.xmlHash);
     const isRepeatedInSelection = (hashCounts.get(entry.xmlHash) ?? 0) > 1;
 
     return {
       ...entry,
-      duplicateReason: isAlreadyImported
-        ? 'already-imported'
-        : isRepeatedInSelection
-          ? 'selected-more-than-once'
-          : null,
+      duplicateReason: isRepeatedInSelection ? 'selected-more-than-once' : null,
     };
   });
 }
@@ -358,7 +342,6 @@ async function removeUploadedSources(uploadedSources: UploadedSessionImportSourc
 }
 
 export function ImportSessionsForm({
-  importedSessionHashes,
   preferredDriverNames,
   returnTo,
   submitLabel = 'Importar sesiones',
@@ -371,10 +354,6 @@ export function ImportSessionsForm({
   const [pendingMessage, setPendingMessage] = useState(
     'Estamos preparando la importación en segundo plano.',
   );
-  const importedSessionHashSet = useMemo(
-    () => new Set(importedSessionHashes),
-    [importedSessionHashes],
-  );
 
   const entries = useMemo(
     () =>
@@ -384,9 +363,8 @@ export function ImportSessionsForm({
             entry.matchState !== 'invalid' &&
             doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
         ),
-        importedSessionHashSet,
       ),
-    [allEntries, importedSessionHashSet, sessionTypeFilter],
+    [allEntries, sessionTypeFilter],
   );
 
   const preferredDriverSummary = useMemo(() => {

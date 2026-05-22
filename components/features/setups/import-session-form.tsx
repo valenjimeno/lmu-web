@@ -3,7 +3,6 @@
 import type { ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
 import {
-  computeXmlHash,
   extractDriverNamesWithValidLaps,
   findPreferredDriverName,
   type MatchState,
@@ -14,7 +13,6 @@ import { detectSessionTypeFromXml, formatSessionType } from '@/lib/utils/session
 type ImportSessionFormProps = {
   action: (formData: FormData) => void | Promise<void>;
   setupId?: string;
-  importedSessionHashes: string[];
   preferredDriverNames: string[];
   returnTo?: string;
   requireSessionName?: boolean;
@@ -28,7 +26,6 @@ const inputClassName =
 export function ImportSessionForm({
   action,
   setupId,
-  importedSessionHashes,
   preferredDriverNames,
   returnTo,
   requireSessionName = false,
@@ -42,11 +39,6 @@ export function ImportSessionForm({
   const [selectedDriverName, setSelectedDriverName] = useState('');
   const [sessionType, setSessionType] = useState<string | null>(null);
   const [matchState, setMatchState] = useState<MatchState>('idle');
-  const [isDuplicateSession, setIsDuplicateSession] = useState(false);
-  const importedSessionHashSet = useMemo(
-    () => new Set(importedSessionHashes),
-    [importedSessionHashes],
-  );
 
   const preferredDriverSummary = useMemo(() => {
     const normalizedNames = preferredDriverNames.filter(Boolean);
@@ -65,22 +57,18 @@ export function ImportSessionForm({
       setSelectedDriverName('');
       setSessionType(null);
       setMatchState('idle');
-      setIsDuplicateSession(false);
       return;
     }
 
     const nextXmlContent = await selectedFile.text();
-    const nextXmlHash = await computeXmlHash(nextXmlContent);
     const nextDriverNames = extractDriverNamesWithValidLaps(nextXmlContent);
     const nextSessionType = detectSessionTypeFromXml(nextXmlContent);
     const preferredDriverName = findPreferredDriverName(nextDriverNames, preferredDriverNames);
-    const duplicateDetected = importedSessionHashSet.has(nextXmlHash);
 
     setSourceFileName(selectedFile.name);
     setXmlContent(nextXmlContent);
     setAvailableDriverNames(nextDriverNames);
     setSessionType(nextSessionType);
-    setIsDuplicateSession(duplicateDetected);
 
     if (requireSessionName && !sessionName.trim()) {
       setSessionName(selectedFile.name.replace(/\.[^.]+$/, ''));
@@ -105,7 +93,6 @@ export function ImportSessionForm({
   const canSubmit =
     (!requireSessionName || Boolean(sessionName.trim())) &&
     xmlContent.length > 0 &&
-    !isDuplicateSession &&
     ((matchState === 'matched' && Boolean(selectedDriverName)) ||
       (matchState === 'needs-selection' && Boolean(selectedDriverName)));
 
@@ -154,12 +141,6 @@ export function ImportSessionForm({
       {matchState === 'matched' ? (
         <div className="rounded-[1rem] border border-emerald-400/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
           Piloto detectado automáticamente: <strong>{selectedDriverName}</strong>
-        </div>
-      ) : null}
-
-      {isDuplicateSession ? (
-        <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
-          Este XML ya está importado como sesión. No puedes subir el mismo fichero más de una vez.
         </div>
       ) : null}
 

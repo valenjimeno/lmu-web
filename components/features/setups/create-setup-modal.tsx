@@ -60,7 +60,6 @@ type SetupFormModalProps = {
     tcSlipAngle?: number | null;
     bestLapMs?: number | null;
     preferredDriverNames?: string[];
-    importedSessionHashes?: string[];
   };
 };
 
@@ -77,7 +76,6 @@ type EditSetupModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
-  importedSessionHashes: string[];
   setup: SetupSummary;
   preferredDriverName?: string;
   triggerClassName?: string;
@@ -560,7 +558,6 @@ function SetupFormModal({
                   <ImportSessionForm
                     action={importSetupSessionAction}
                     setupId={defaultValues.setupId}
-                    importedSessionHashes={defaultValues.importedSessionHashes ?? []}
                     preferredDriverNames={defaultValues.preferredDriverNames ?? []}
                     returnTo={defaultValues.returnTo ?? routes.setups}
                   />
@@ -612,7 +609,6 @@ export function EditSetupModal({
   cars,
   tracks,
   defaultCarClassId,
-  importedSessionHashes,
   setup,
   preferredDriverName,
   triggerClassName,
@@ -647,7 +643,6 @@ export function EditSetupModal({
         tcPowerCut: setup.tcPowerCut,
         tcSlipAngle: setup.tcSlipAngle,
         bestLapMs: setup.bestLapMs,
-        importedSessionHashes,
         preferredDriverNames: preferredDriverName ? [preferredDriverName] : [],
       }}
       trigger={

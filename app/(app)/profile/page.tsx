@@ -1,7 +1,6 @@
 import { ProfileCard } from '@/components/features/profile/profile-card';
-import { getCurrentUser } from '@/lib/supabase/auth';
 import { routes } from '@/lib/constants/routes';
-import { getProfilePageData } from '@/services/profile.service';
+import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { redirect } from 'next/navigation';
 
 type ProfilePageProps = {
@@ -20,21 +19,18 @@ function resolveQueryParam(value?: string | string[]) {
 }
 
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
-  const user = await getCurrentUser();
+  const appContext = await getAuthenticatedAppContext();
 
-  if (!user) {
+  if (!appContext) {
     redirect(routes.login);
   }
 
-  const [{ error, success }, { profile }] = await Promise.all([
-    searchParams,
-    getProfilePageData(user.id),
-  ]);
+  const { error, success } = await searchParams;
 
   return (
     <section>
       <ProfileCard
-        profile={profile}
+        profile={appContext.profile}
         errorCode={resolveQueryParam(error)}
         successCode={resolveQueryParam(success)}
       />
