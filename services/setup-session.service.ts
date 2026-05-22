@@ -479,6 +479,7 @@ function parseRaceXml(xmlContent: string): ParsedRaceXml {
       session_datetime: parseRaceDateTime(extractTagContent(normalizedXml, 'TimeString')),
       session_type:
         detectSessionTypeFromXml(normalizedXml) ?? extractTagContent(normalizedXml, 'Setting'),
+      source_session_setting: extractTagContent(normalizedXml, 'Setting'),
       server_name: extractTagContent(normalizedXml, 'ServerName'),
       game_version: extractTagContent(normalizedXml, 'GameVersion'),
       track_venue: extractTagContent(normalizedXml, 'TrackVenue'),

@@ -12,6 +12,7 @@ type SetupSessionRow = Pick<
   | 'car_class'
   | 'car_type'
   | 'source_file_name'
+  | 'source_session_setting'
   | 'imported_at'
   | 'session_datetime'
   | 'session_type'
@@ -39,6 +40,7 @@ type SetupSessionDetailRow = Pick<
   | 'imported_at'
   | 'session_datetime'
   | 'session_type'
+  | 'source_session_setting'
   | 'server_name'
   | 'game_version'
   | 'track_venue'
@@ -127,6 +129,7 @@ type SessionIdentityRow = Pick<
   | 'driver_name'
   | 'car_type'
   | 'source_file_name'
+  | 'source_session_setting'
   | 'imported_at'
   | 'session_datetime'
   | 'session_type'
@@ -155,6 +158,7 @@ export type SessionSummary = {
   trackVenue: string | null;
   driverName: string;
   sourceFileName: string | null;
+  sourceSessionSetting: string | null;
   importedAt: string;
   sessionDateTime: string | null;
   sessionType: string | null;
@@ -174,6 +178,7 @@ export type SessionDetail = SessionSummary & {
   serverName: string | null;
   gameVersion: string | null;
   sourceType: string;
+  sourceSessionSetting: string | null;
   trackCourse: string | null;
   trackEvent: string | null;
   trackLayoutPath: string | null;
@@ -309,6 +314,7 @@ function buildSessionSummary(
     trackVenue: session.track_venue,
     driverName: session.driver_name?.trim() || 'Piloto no disponible',
     sourceFileName: session.source_file_name,
+    sourceSessionSetting: session.source_session_setting,
     importedAt: session.imported_at,
     sessionDateTime: session.session_datetime,
     sessionType: session.session_type,
@@ -338,10 +344,10 @@ function buildSessionIdentity(
 }
 
 const setupSessionDetailSelectWithMetrics =
-  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, valid_lap_count, valid_lap_rate, average_fuel_used_per_lap, fuel_min_per_lap, fuel_max_per_lap, projected_fuel_20_minutes, projected_fuel_30_minutes, projected_fuel_45_minutes, peak_top_speed_kph, tire_drop_front, tire_drop_rear, tire_drop_front_per_lap, tire_drop_rear_per_lap, front_rear_wear_ratio, left_right_wear_ratio, front_compound, rear_compound, insights';
+  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, source_session_setting, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, valid_lap_count, valid_lap_rate, average_fuel_used_per_lap, fuel_min_per_lap, fuel_max_per_lap, projected_fuel_20_minutes, projected_fuel_30_minutes, projected_fuel_45_minutes, peak_top_speed_kph, tire_drop_front, tire_drop_rear, tire_drop_front_per_lap, tire_drop_rear_per_lap, front_rear_wear_ratio, left_right_wear_ratio, front_compound, rear_compound, insights';
 
 const setupSessionDetailSelectLegacy =
-  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count';
+  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, source_session_setting, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count';
 
 function isMissingSchemaColumnError(error: unknown) {
   return (

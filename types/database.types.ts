@@ -490,6 +490,7 @@ export type Database = {
           setup_id: string | null;
           source_file_hash: string | null;
           source_file_name: string | null;
+          source_session_setting: string | null;
           source_type: string;
           team_name: string | null;
           tire_drop_front: number | null;
@@ -575,6 +576,7 @@ export type Database = {
           setup_id?: string | null;
           source_file_hash?: string | null;
           source_file_name?: string | null;
+          source_session_setting?: string | null;
           source_type?: string;
           team_name?: string | null;
           tire_drop_front?: number | null;
@@ -660,6 +662,7 @@ export type Database = {
           setup_id?: string | null;
           source_file_hash?: string | null;
           source_file_name?: string | null;
+          source_session_setting?: string | null;
           source_type?: string;
           team_name?: string | null;
           tire_drop_front?: number | null;
