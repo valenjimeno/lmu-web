@@ -244,6 +244,7 @@ export type SessionDetail = SessionSummary & {
 };
 
 export type SessionFilters = {
+  sourceSessionSetting?: string;
   carClassId?: string;
   carId?: string;
   trackId?: string;
@@ -259,10 +260,11 @@ function resolveSessionCatalogFilters(
   cars: Awaited<ReturnType<typeof getSetupCatalog>>['cars'],
   filters: Pick<SessionFilters, 'carClassId' | 'carId'>,
 ) {
-  const defaultCarClassId = undefined;
+  const defaultCarClassId =
+    carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
   const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
     ? filters.carClassId
-    : undefined;
+    : defaultCarClassId;
   const carsForSelectedClass = selectedCarClassId
     ? cars.filter((car) => car.car_class_id === selectedCarClassId)
     : cars;
@@ -362,9 +364,14 @@ function normalizeText(value: string | null | undefined) {
   return (value ?? '')
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLocaleLowerCase();
+}
+
+function normalizeCompactText(value: string | null | undefined) {
+  return normalizeText(value).replace(/\s+/g, '');
 }
 
 function canonicalizeSessionClass(value: string | null | undefined) {
@@ -381,6 +388,55 @@ function canonicalizeSessionClass(value: string | null | undefined) {
   return normalized;
 }
 
+function buildTextCandidates(...values: Array<string | null | undefined>) {
+  const candidates = new Set<string>();
+
+  for (const value of values) {
+    const normalizedValue = normalizeText(value);
+
+    if (!normalizedValue) {
+      continue;
+    }
+
+    candidates.add(normalizedValue);
+    candidates.add(normalizeCompactText(value));
+  }
+
+  return Array.from(candidates);
+}
+
+function matchesCandidateText(
+  value: string | null | undefined,
+  candidates: string[],
+  minimumSubstringLength = 6,
+) {
+  const normalizedValue = normalizeText(value);
+  const compactNormalizedValue = normalizeCompactText(value);
+
+  if (!normalizedValue || !compactNormalizedValue) {
+    return false;
+  }
+
+  return candidates.some((candidate) => {
+    const compactCandidate = candidate.replace(/\s+/g, '');
+
+    return (
+      candidate === normalizedValue ||
+      compactCandidate === compactNormalizedValue ||
+      (candidate.length >= minimumSubstringLength && normalizedValue.includes(candidate)) ||
+      (normalizedValue.length >= minimumSubstringLength && candidate.includes(normalizedValue)) ||
+      (compactCandidate.length >= minimumSubstringLength &&
+        compactNormalizedValue.includes(compactCandidate)) ||
+      (compactNormalizedValue.length >= minimumSubstringLength &&
+        compactCandidate.includes(compactNormalizedValue))
+    );
+  });
+}
+
+function normalizeSessionSetting(value: string | null | undefined) {
+  return normalizeText(value);
+}
+
 export async function getSessionPageData(
   userId: string,
   filters: SessionFilters = {},
@@ -390,16 +446,49 @@ export async function getSessionPageData(
   const { carClasses, manufacturers, cars, tracks } = await getSetupCatalog();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.max(1, options.pageSize ?? 10);
+  const defaultSourceSessionSetting = 'Multiplayer';
 
   const { defaultCarClassId, selectedCarClassId, carsForSelectedClass, selectedCarId } =
     resolveSessionCatalogFilters(carClasses, cars, filters);
   const selectedTrackId = tracks.some((track) => track.id === filters.trackId)
     ? filters.trackId
     : undefined;
+  const sessionSettingsResult = await supabase
+    .from('setup_sessions')
+    .select('source_session_setting')
+    .eq('owner_user_id', userId)
+    .not('source_session_setting', 'is', null);
+
+  if (sessionSettingsResult.error) {
+    throw sessionSettingsResult.error;
+  }
+
+  const discoveredSessionSettings = Array.from(
+    new Set(
+      (sessionSettingsResult.data ?? [])
+        .map((row) => row.source_session_setting?.trim() ?? '')
+        .filter((value) => value.length > 0),
+    ),
+  );
+  const sessionSettings = [
+    defaultSourceSessionSetting,
+    ...discoveredSessionSettings.filter(
+      (value) =>
+        normalizeSessionSetting(value) !== normalizeSessionSetting(defaultSourceSessionSetting),
+    ),
+  ].map((value) => ({ id: value, name: value }));
+  const selectedSourceSessionSetting =
+    sessionSettings.find(
+      (setting) =>
+        normalizeSessionSetting(setting.id) ===
+        normalizeSessionSetting(filters.sourceSessionSetting),
+    )?.id ?? defaultSourceSessionSetting;
   const selectedCarClassName =
     carClasses.find((carClass) => carClass.id === selectedCarClassId)?.name ?? null;
-  const selectedCarName = cars.find((car) => car.id === selectedCarId)?.name ?? null;
-  const selectedTrackName = tracks.find((track) => track.id === selectedTrackId)?.name ?? null;
+  const selectedCar = cars.find((car) => car.id === selectedCarId) ?? null;
+  const selectedCarName = selectedCar?.name ?? null;
+  const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
+  const selectedTrackName = selectedTrack?.name ?? null;
 
   let setupsQuery = supabase
     .from('setups')
@@ -409,25 +498,11 @@ export async function getSessionPageData(
   if (selectedCarClassId) {
     const scopedCarIds = carsForSelectedClass.map((car) => car.id);
 
-    if (scopedCarIds.length === 0) {
-      return {
-        carClasses,
-        cars,
-        tracks,
-        sessions: [] as SessionSummary[],
-        totalCount: 0,
-        page: 1,
-        pageSize,
-        resolvedFilters: {
-          carClassId: selectedCarClassId,
-          carId: undefined,
-          trackId: selectedTrackId,
-        },
-        defaultCarClassId,
-      };
+    if (scopedCarIds.length > 0) {
+      setupsQuery = setupsQuery.in('car_id', scopedCarIds);
+    } else {
+      setupsQuery = setupsQuery.in('car_id', ['00000000-0000-0000-0000-000000000000']);
     }
-
-    setupsQuery = setupsQuery.in('car_id', scopedCarIds);
   }
 
   if (selectedCarId) {
@@ -454,32 +529,37 @@ export async function getSessionPageData(
   const normalizedSelectedCarClassName = normalizeText(selectedCarClassName);
   const normalizedSelectedCarName = normalizeText(selectedCarName);
   const normalizedSelectedTrackName = normalizeText(selectedTrackName);
+  const normalizedSelectedSourceSessionSetting = normalizeSessionSetting(
+    selectedSourceSessionSetting,
+  );
+  const selectedCarCandidates = buildTextCandidates(
+    selectedCar?.name,
+    selectedCar?.slug,
+    selectedCarName,
+  );
+  const selectedTrackCandidates = buildTextCandidates(
+    selectedTrack?.name,
+    selectedTrack?.slug,
+    selectedTrack?.official_name,
+    selectedTrack?.city,
+    selectedTrackName,
+  );
 
-  let standaloneSessionsQuery = supabase
+  const standaloneSessionsQuery = supabase
     .from('setup_sessions')
     .select(
-      'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
+      'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
     )
     .eq('owner_user_id', userId)
     .is('setup_id', null)
     .order('imported_at', { ascending: false });
-
-  if (selectedCarName) {
-    standaloneSessionsQuery = standaloneSessionsQuery.eq('car_type', selectedCarName);
-  }
-
-  if (selectedTrackName) {
-    standaloneSessionsQuery = standaloneSessionsQuery.or(
-      `track_venue.eq.${selectedTrackName},track_course.eq.${selectedTrackName}`,
-    );
-  }
 
   const linkedSessionsPromise =
     scopedSetups.length > 0
       ? supabase
           .from('setup_sessions')
           .select(
-            'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
+            'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops',
           )
           .eq('owner_user_id', userId)
           .in(
@@ -505,7 +585,12 @@ export async function getSessionPageData(
   const rawSessions = [
     ...((linkedSessionsResult.data ?? []) as SetupSessionRow[]),
     ...((standaloneSessionsResult.data ?? []) as SetupSessionRow[]),
-  ].sort((left, right) => Date.parse(right.imported_at) - Date.parse(left.imported_at));
+  ].sort((left, right) => {
+    const rightTimestamp = Date.parse(right.session_datetime ?? right.imported_at);
+    const leftTimestamp = Date.parse(left.session_datetime ?? left.imported_at);
+
+    return rightTimestamp - leftTimestamp;
+  });
   const rawSessionsById = new Map(rawSessions.map((session) => [session.id, session]));
   const filteredSessions = rawSessions
     .map((session) =>
@@ -518,6 +603,14 @@ export async function getSessionPageData(
       ),
     )
     .filter((session) => {
+      if (
+        normalizedSelectedSourceSessionSetting &&
+        normalizeSessionSetting(session.sourceSessionSetting) !==
+          normalizedSelectedSourceSessionSetting
+      ) {
+        return false;
+      }
+
       if (selectedCarClassId) {
         const sessionCarClassName = canonicalizeSessionClass(
           session.carClassId
@@ -540,10 +633,13 @@ export async function getSessionPageData(
 
       if (selectedCarId) {
         const normalizedSessionCarName = normalizeText(session.carName);
+        const rawSession = rawSessionsById.get(session.id);
 
         if (
           session.carId !== selectedCarId &&
-          normalizedSessionCarName !== normalizedSelectedCarName
+          normalizedSessionCarName !== normalizedSelectedCarName &&
+          !matchesCandidateText(session.carName, selectedCarCandidates) &&
+          !matchesCandidateText(rawSession?.car_type, selectedCarCandidates)
         ) {
           return false;
         }
@@ -551,16 +647,26 @@ export async function getSessionPageData(
 
       if (selectedTrackId) {
         const normalizedSessionTrackName = normalizeText(session.trackName);
+        const rawSession = rawSessionsById.get(session.id);
 
         if (
           session.trackId !== selectedTrackId &&
-          normalizedSessionTrackName !== normalizedSelectedTrackName
+          normalizedSessionTrackName !== normalizedSelectedTrackName &&
+          !matchesCandidateText(session.trackName, selectedTrackCandidates) &&
+          !matchesCandidateText(rawSession?.track_venue, selectedTrackCandidates) &&
+          !matchesCandidateText(rawSession?.track_course, selectedTrackCandidates)
         ) {
           return false;
         }
       }
 
       return true;
+    })
+    .sort((left, right) => {
+      const rightTimestamp = Date.parse(right.sessionDateTime ?? right.importedAt);
+      const leftTimestamp = Date.parse(left.sessionDateTime ?? left.importedAt);
+
+      return rightTimestamp - leftTimestamp;
     });
 
   const totalCount = filteredSessions.length;
@@ -573,16 +679,19 @@ export async function getSessionPageData(
     carClasses,
     cars,
     tracks,
+    sessionSettings,
     sessions: filteredSessions.slice(from, to),
     totalCount,
     page: safePage,
     pageSize,
     resolvedFilters: {
+      sourceSessionSetting: selectedSourceSessionSetting,
       carClassId: selectedCarClassId,
       carId: selectedCarId,
       trackId: selectedTrackId,
     },
     defaultCarClassId,
+    defaultSourceSessionSetting,
   };
 }
 

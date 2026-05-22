@@ -22,16 +22,19 @@ type CarOption = Option & {
 };
 
 type SessionConsoleFilters = {
+  sourceSessionSetting?: string;
   carClassId?: string;
   carId?: string;
   trackId?: string;
 };
 
 type SessionsConsoleProps = {
+  sessionSettings: Option[];
   carClasses: Option[];
   cars: CarOption[];
   tracks: Option[];
   filters: SessionConsoleFilters;
+  defaultSourceSessionSetting: string;
   defaultCarClassId?: string;
   sessions: SessionSummary[];
   totalCount: number;
@@ -103,10 +106,12 @@ function aggregateImportJobs(jobs: SessionImportJobSummary[]): SessionImportProg
 }
 
 export function SessionsConsole({
+  sessionSettings,
   carClasses,
   cars,
   tracks,
   filters,
+  defaultSourceSessionSetting,
   defaultCarClassId,
   sessions,
   totalCount,
@@ -135,31 +140,29 @@ export function SessionsConsole({
   const filterFormKey = useMemo(
     () =>
       JSON.stringify({
+        sourceSessionSetting: filters.sourceSessionSetting ?? defaultSourceSessionSetting,
         carClassId: filters.carClassId ?? defaultCarClassId ?? '',
-        carId: filters.carId ?? '',
         trackId: filters.trackId ?? '',
+        carId: filters.carId ?? '',
       }),
-    [defaultCarClassId, filters],
+    [defaultCarClassId, defaultSourceSessionSetting, filters],
   );
 
   const activeFilters = useMemo(
     () =>
       [
+        filters.sourceSessionSetting && filters.sourceSessionSetting !== defaultSourceSessionSetting
+          ? {
+              key: 'sourceSessionSetting',
+              label: buildCompactLabel(filters.sourceSessionSetting, 'Tipo'),
+            }
+          : null,
         filters.carClassId && filters.carClassId !== defaultCarClassId
           ? {
               key: 'carClassId',
               label: buildCompactLabel(
                 carClasses.find((carClass) => carClass.id === filters.carClassId)?.name ?? '',
                 'Clase',
-              ),
-            }
-          : null,
-        filters.carId
-          ? {
-              key: 'carId',
-              label: buildCompactLabel(
-                cars.find((car) => car.id === filters.carId)?.name ?? '',
-                'Coche',
               ),
             }
           : null,
@@ -172,8 +175,17 @@ export function SessionsConsole({
               ),
             }
           : null,
+        filters.carId
+          ? {
+              key: 'carId',
+              label: buildCompactLabel(
+                cars.find((car) => car.id === filters.carId)?.name ?? '',
+                'Coche',
+              ),
+            }
+          : null,
       ].filter(Boolean) as Array<{ key: keyof SessionConsoleFilters; label: string }>,
-    [carClasses, cars, defaultCarClassId, filters, tracks],
+    [carClasses, cars, defaultCarClassId, defaultSourceSessionSetting, filters, tracks],
   );
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) ?? sessions[0] ?? null,
@@ -317,17 +329,23 @@ export function SessionsConsole({
     (nextPage: number, nextFilters: SessionConsoleFilters = filters) => {
       const params = new URLSearchParams();
 
+      if (
+        nextFilters.sourceSessionSetting &&
+        nextFilters.sourceSessionSetting !== defaultSourceSessionSetting
+      ) {
+        params.set('sourceSessionSetting', nextFilters.sourceSessionSetting);
+      }
       if (nextFilters.carClassId && nextFilters.carClassId !== defaultCarClassId) {
         params.set('carClassId', nextFilters.carClassId);
       }
-      if (nextFilters.carId) params.set('carId', nextFilters.carId);
       if (nextFilters.trackId) params.set('trackId', nextFilters.trackId);
+      if (nextFilters.carId) params.set('carId', nextFilters.carId);
       if (nextPage > 1) params.set('page', String(nextPage));
 
       const search = params.toString();
       return search ? `${pathname}?${search}` : pathname;
     },
-    [defaultCarClassId, filters, pathname],
+    [defaultCarClassId, defaultSourceSessionSetting, filters, pathname],
   );
 
   const applyFilters = useCallback(
@@ -346,7 +364,12 @@ export function SessionsConsole({
   function clearSingleFilter(key: keyof SessionConsoleFilters) {
     const nextFilters = {
       ...filters,
-      [key]: key === 'carClassId' ? defaultCarClassId : undefined,
+      [key]:
+        key === 'sourceSessionSetting'
+          ? defaultSourceSessionSetting
+          : key === 'carClassId'
+            ? defaultCarClassId
+            : undefined,
       ...(key === 'carClassId' ? { carId: undefined } : {}),
     };
 
@@ -443,10 +466,12 @@ export function SessionsConsole({
 
           <SessionsFiltersForm
             key={filterFormKey}
+            sessionSettings={sessionSettings}
             carClasses={carClasses}
             cars={cars}
             tracks={tracks}
             filters={filters}
+            defaultSourceSessionSetting={defaultSourceSessionSetting}
             defaultCarClassId={defaultCarClassId}
             onApply={applyFilters}
             onReset={() => router.push(pathname)}
@@ -616,26 +641,33 @@ export function SessionsConsole({
 }
 
 function SessionsFiltersForm({
+  sessionSettings,
   carClasses,
   cars,
   tracks,
   filters,
+  defaultSourceSessionSetting,
   defaultCarClassId,
   onApply,
   onReset,
 }: {
+  sessionSettings: Option[];
   carClasses: Option[];
   cars: CarOption[];
   tracks: Option[];
   filters: SessionConsoleFilters;
+  defaultSourceSessionSetting: string;
   defaultCarClassId?: string;
   onApply: (filters: SessionConsoleFilters) => void;
   onReset: () => void;
 }) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [sourceSessionSetting, setSourceSessionSetting] = useState(
+    filters.sourceSessionSetting ?? defaultSourceSessionSetting,
+  );
   const [carClassId, setCarClassId] = useState(filters.carClassId ?? defaultCarClassId ?? '');
-  const [carId, setCarId] = useState(filters.carId ?? '');
   const [trackId, setTrackId] = useState(filters.trackId ?? '');
+  const [carId, setCarId] = useState(filters.carId ?? '');
   const hasMountedRef = useRef(false);
 
   const filteredCars = useMemo(() => {
@@ -652,57 +684,66 @@ function SessionsFiltersForm({
       return undefined;
     }
 
+    const normalizedSourceSessionSetting = sourceSessionSetting || defaultSourceSessionSetting;
     const normalizedCarClassId = carClassId || defaultCarClassId || undefined;
-    const normalizedCarId = carId || undefined;
     const normalizedTrackId = trackId || undefined;
+    const normalizedCarId = carId || undefined;
 
     if (
+      normalizedSourceSessionSetting ===
+        (filters.sourceSessionSetting ?? defaultSourceSessionSetting) &&
       normalizedCarClassId === (filters.carClassId ?? defaultCarClassId ?? undefined) &&
-      normalizedCarId === (filters.carId ?? undefined) &&
-      normalizedTrackId === (filters.trackId ?? undefined)
+      normalizedTrackId === (filters.trackId ?? undefined) &&
+      normalizedCarId === (filters.carId ?? undefined)
     ) {
       return undefined;
     }
 
     const timeoutId = window.setTimeout(() => {
       onApply({
+        sourceSessionSetting: normalizedSourceSessionSetting,
         carClassId: normalizedCarClassId,
-        carId: normalizedCarId,
         trackId: normalizedTrackId,
+        carId: normalizedCarId,
       });
     }, 220);
 
     return () => window.clearTimeout(timeoutId);
   }, [
+    defaultSourceSessionSetting,
     carClassId,
-    carId,
     defaultCarClassId,
-    filters.carClassId,
-    filters.carId,
-    filters.trackId,
-    onApply,
+    sourceSessionSetting,
     trackId,
+    carId,
+    filters.sourceSessionSetting,
+    filters.carClassId,
+    filters.trackId,
+    filters.carId,
+    onApply,
   ]);
 
   function applyImmediate(next: Partial<SessionConsoleFilters>) {
     onApply({
+      sourceSessionSetting: sourceSessionSetting || defaultSourceSessionSetting,
       carClassId: carClassId || defaultCarClassId || undefined,
-      carId: carId || undefined,
       trackId: trackId || undefined,
+      carId: carId || undefined,
       ...next,
     });
   }
 
   function resetFilters() {
+    setSourceSessionSetting(defaultSourceSessionSetting);
     setCarClassId(defaultCarClassId ?? '');
-    setCarId('');
     setTrackId('');
+    setCarId('');
     onReset();
   }
 
   return (
     <div className="hairline-divider border-b px-4 py-2.5 lg:px-6">
-      <div className="grid gap-1.5 xl:grid-cols-[minmax(160px,0.85fr)_minmax(170px,1fr)_minmax(145px,0.85fr)]">
+      <div className="grid gap-1.5 xl:grid-cols-[minmax(150px,0.9fr)_minmax(160px,0.9fr)_minmax(145px,0.9fr)_minmax(170px,1fr)]">
         <button
           type="button"
           onClick={() => setMobileFiltersOpen((value) => !value)}
@@ -710,6 +751,21 @@ function SessionsFiltersForm({
         >
           Filtros
         </button>
+        <select
+          value={sourceSessionSetting}
+          onChange={(event) => {
+            const nextSourceSessionSetting = event.target.value || defaultSourceSessionSetting;
+            setSourceSessionSetting(nextSourceSessionSetting);
+            applyImmediate({ sourceSessionSetting: nextSourceSessionSetting });
+          }}
+          className="input-surface hidden min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none xl:block"
+        >
+          {sessionSettings.map((setting) => (
+            <option key={setting.id} value={setting.id}>
+              {setting.name}
+            </option>
+          ))}
+        </select>
         <select
           value={carClassId}
           onChange={(event) => {
@@ -736,22 +792,6 @@ function SessionsFiltersForm({
           ))}
         </select>
         <select
-          value={carId}
-          onChange={(event) => {
-            const nextCarId = event.target.value || undefined;
-            setCarId(event.target.value);
-            applyImmediate({ carId: nextCarId });
-          }}
-          className="input-surface hidden min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none xl:block"
-        >
-          <option value="">Coche</option>
-          {filteredCars.map((car) => (
-            <option key={car.id} value={car.id}>
-              {car.name}
-            </option>
-          ))}
-        </select>
-        <select
           value={trackId}
           onChange={(event) => {
             const nextTrackId = event.target.value || undefined;
@@ -767,15 +807,54 @@ function SessionsFiltersForm({
             </option>
           ))}
         </select>
+        <select
+          value={carId}
+          onChange={(event) => {
+            const nextCarId = event.target.value || undefined;
+            setCarId(event.target.value);
+            applyImmediate({ carId: nextCarId });
+          }}
+          className="input-surface hidden min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none xl:block"
+        >
+          <option value="">Coche</option>
+          {filteredCars.map((car) => (
+            <option key={car.id} value={car.id}>
+              {car.name}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {activeFilterSummary(filters) ? (
-        <p className="mt-1.5 text-[11px] text-white/42 xl:hidden">{activeFilterSummary(filters)}</p>
+      {activeFilterSummary(filters, {
+        defaultSourceSessionSetting,
+        defaultCarClassId,
+      }) ? (
+        <p className="mt-1.5 text-[11px] text-white/42 xl:hidden">
+          {activeFilterSummary(filters, {
+            defaultSourceSessionSetting,
+            defaultCarClassId,
+          })}
+        </p>
       ) : null}
 
       {mobileFiltersOpen ? (
         <div className="mt-2 rounded-[0.95rem] border border-white/8 bg-white/[0.025] p-3 xl:hidden">
           <div className="grid gap-1.5 sm:grid-cols-2">
+            <select
+              value={sourceSessionSetting}
+              onChange={(event) => {
+                const nextSourceSessionSetting = event.target.value || defaultSourceSessionSetting;
+                setSourceSessionSetting(nextSourceSessionSetting);
+                applyImmediate({ sourceSessionSetting: nextSourceSessionSetting });
+              }}
+              className="input-surface min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none"
+            >
+              {sessionSettings.map((setting) => (
+                <option key={setting.id} value={setting.id}>
+                  {setting.name}
+                </option>
+              ))}
+            </select>
             <select
               value={carClassId}
               onChange={(event) => {
@@ -797,22 +876,6 @@ function SessionsFiltersForm({
               ))}
             </select>
             <select
-              value={carId}
-              onChange={(event) => {
-                const nextCarId = event.target.value || undefined;
-                setCarId(event.target.value);
-                applyImmediate({ carId: nextCarId });
-              }}
-              className="input-surface min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none"
-            >
-              <option value="">Coche</option>
-              {filteredCars.map((car) => (
-                <option key={car.id} value={car.id}>
-                  {car.name}
-                </option>
-              ))}
-            </select>
-            <select
               value={trackId}
               onChange={(event) => {
                 const nextTrackId = event.target.value || undefined;
@@ -825,6 +888,22 @@ function SessionsFiltersForm({
               {tracks.map((track) => (
                 <option key={track.id} value={track.id}>
                   {track.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={carId}
+              onChange={(event) => {
+                const nextCarId = event.target.value || undefined;
+                setCarId(event.target.value);
+                applyImmediate({ carId: nextCarId });
+              }}
+              className="input-surface min-h-9 rounded-[0.8rem] border-white/10 px-3 text-[13px] text-white outline-none"
+            >
+              <option value="">Coche</option>
+              {filteredCars.map((car) => (
+                <option key={car.id} value={car.id}>
+                  {car.name}
                 </option>
               ))}
             </select>
@@ -845,10 +924,22 @@ function SessionsFiltersForm({
   );
 }
 
-function activeFilterSummary(filters: SessionConsoleFilters) {
-  const items = [filters.carId ? 'coche' : null, filters.trackId ? 'circuito' : null].filter(
-    Boolean,
-  );
+function activeFilterSummary(
+  filters: SessionConsoleFilters,
+  defaults: {
+    defaultSourceSessionSetting: string;
+    defaultCarClassId?: string;
+  },
+) {
+  const items = [
+    filters.sourceSessionSetting &&
+    filters.sourceSessionSetting !== defaults.defaultSourceSessionSetting
+      ? 'tipo'
+      : null,
+    filters.carClassId && filters.carClassId !== defaults.defaultCarClassId ? 'clase' : null,
+    filters.trackId ? 'circuito' : null,
+    filters.carId ? 'coche' : null,
+  ].filter(Boolean);
 
   return items.length > 0 ? `Filtros activos: ${items.join(', ')}` : null;
 }

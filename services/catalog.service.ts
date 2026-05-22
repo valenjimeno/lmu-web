@@ -12,9 +12,12 @@ export type ManufacturerOption = Pick<
 >;
 export type CarOption = Pick<
   Database['public']['Tables']['cars']['Row'],
-  'id' | 'name' | 'car_class_id' | 'manufacturer_id'
+  'id' | 'name' | 'slug' | 'car_class_id' | 'manufacturer_id'
 >;
-export type TrackOption = Pick<Database['public']['Tables']['tracks']['Row'], 'id' | 'name'>;
+export type TrackOption = Pick<
+  Database['public']['Tables']['tracks']['Row'],
+  'id' | 'name' | 'slug' | 'official_name' | 'city'
+>;
 
 export type SetupCatalog = {
   carClasses: CarClassOption[];
@@ -35,8 +38,8 @@ export async function getSetupCatalog(): Promise<SetupCatalog> {
   const [carClassesResult, manufacturersResult, carsResult, tracksResult] = await Promise.all([
     supabase.from('car_classes').select('id, name, slug').order('name'),
     supabase.from('manufacturers').select('id, name').order('name'),
-    supabase.from('cars').select('id, name, car_class_id, manufacturer_id').order('name'),
-    supabase.from('tracks').select('id, name').order('name'),
+    supabase.from('cars').select('id, name, slug, car_class_id, manufacturer_id').order('name'),
+    supabase.from('tracks').select('id, name, slug, official_name, city').order('name'),
   ]);
 
   if (carClassesResult.error) {

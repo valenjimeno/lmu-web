@@ -12,6 +12,7 @@ type SessionsPageProps = {
     deleted?: string;
     error?: string;
     debug?: string;
+    sourceSessionSetting?: string;
     carClassId?: string;
     carId?: string;
     trackId?: string;
@@ -60,11 +61,13 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
 
   const currentPage = Math.max(1, Number.parseInt(resolvedSearchParams.page ?? '1', 10) || 1);
   const filters = {
+    sourceSessionSetting: resolvedSearchParams.sourceSessionSetting?.trim() || undefined,
     carClassId: resolvedSearchParams.carClassId?.trim() || undefined,
     carId: resolvedSearchParams.carId?.trim() || undefined,
     trackId: resolvedSearchParams.trackId?.trim() || undefined,
   };
   const {
+    sessionSettings,
     carClasses,
     cars,
     tracks,
@@ -74,6 +77,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
     pageSize,
     resolvedFilters,
     defaultCarClassId,
+    defaultSourceSessionSetting,
   } = await getSessionPageData(user.id, filters, {
     page: currentPage,
     pageSize: SESSIONS_PAGE_SIZE,
@@ -103,11 +107,13 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
 
   return (
     <SessionsConsole
+      sessionSettings={sessionSettings}
       carClasses={carClasses.map((carClass) => ({ id: carClass.id, name: carClass.name }))}
       cars={cars.map((car) => ({ id: car.id, name: car.name, carClassId: car.car_class_id }))}
       tracks={tracks}
       filters={resolvedFilters}
       defaultCarClassId={defaultCarClassId}
+      defaultSourceSessionSetting={defaultSourceSessionSetting}
       sessions={sessions}
       totalCount={totalCount}
       page={page}
