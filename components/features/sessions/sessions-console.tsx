@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CreateSessionModal } from '@/components/features/sessions/create-session-modal';
 import { EmptyState } from '@/components/shared/empty-state';
 import { routes } from '@/lib/constants/routes';
@@ -584,6 +584,7 @@ function SessionsFiltersForm({
   const [carClassId, setCarClassId] = useState(filters.carClassId ?? defaultCarClassId ?? '');
   const [carId, setCarId] = useState(filters.carId ?? '');
   const [trackId, setTrackId] = useState(filters.trackId ?? '');
+  const hasMountedRef = useRef(false);
 
   const filteredCars = useMemo(() => {
     if (!carClassId) {
@@ -594,16 +595,42 @@ function SessionsFiltersForm({
   }, [carClassId, cars]);
 
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return undefined;
+    }
+
+    const normalizedCarClassId = carClassId || defaultCarClassId || undefined;
+    const normalizedCarId = carId || undefined;
+    const normalizedTrackId = trackId || undefined;
+
+    if (
+      normalizedCarClassId === (filters.carClassId ?? defaultCarClassId ?? undefined) &&
+      normalizedCarId === (filters.carId ?? undefined) &&
+      normalizedTrackId === (filters.trackId ?? undefined)
+    ) {
+      return undefined;
+    }
+
     const timeoutId = window.setTimeout(() => {
       onApply({
-        carClassId: carClassId || defaultCarClassId || undefined,
-        carId: carId || undefined,
-        trackId: trackId || undefined,
+        carClassId: normalizedCarClassId,
+        carId: normalizedCarId,
+        trackId: normalizedTrackId,
       });
     }, 220);
 
     return () => window.clearTimeout(timeoutId);
-  }, [carClassId, carId, defaultCarClassId, onApply, trackId]);
+  }, [
+    carClassId,
+    carId,
+    defaultCarClassId,
+    filters.carClassId,
+    filters.carId,
+    filters.trackId,
+    onApply,
+    trackId,
+  ]);
 
   function applyImmediate(next: Partial<SessionConsoleFilters>) {
     onApply({
