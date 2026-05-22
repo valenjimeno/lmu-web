@@ -40,6 +40,8 @@ type SessionImportEntry = {
 };
 
 const sessionTypeFilterOptions: SessionTypeFilter[] = ['all', 'race', 'qualify', 'practice'];
+const MAX_JOB_CHUNK_FILES = 8;
+const MAX_JOB_CHUNK_BYTES = 750_000;
 
 const inputClassName =
   'input-surface w-full rounded-[1rem] px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
@@ -269,6 +271,35 @@ function getDefaultSessionName(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || fileName;
 }
 
+function splitEntriesIntoJobChunks(entries: SessionImportEntry[]) {
+  const chunks: SessionImportEntry[][] = [];
+  let currentChunk: SessionImportEntry[] = [];
+  let currentChunkBytes = 0;
+
+  for (const entry of entries) {
+    const entryBytes =
+      entry.xmlContent.length + entry.sessionName.length + entry.sourceFileName.length + 256;
+    const wouldExceedChunkSize =
+      currentChunk.length >= MAX_JOB_CHUNK_FILES ||
+      (currentChunk.length > 0 && currentChunkBytes + entryBytes > MAX_JOB_CHUNK_BYTES);
+
+    if (wouldExceedChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+      currentChunkBytes = 0;
+    }
+
+    currentChunk.push(entry);
+    currentChunkBytes += entryBytes;
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
 function applyDuplicateFlags(
   entries: SessionImportEntry[],
   importedSessionHashSet: ReadonlySet<string>,
@@ -456,39 +487,43 @@ export function ImportSessionsForm({
     setSubmitError(null);
 
     try {
-      const response = await fetch('/api/session-import-jobs', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionTypeFilter,
-          sessions: entries.map((entry) => ({
-            sessionName: entry.sessionName,
-            xmlContent: entry.xmlContent,
-            sourceFileName: entry.sourceFileName,
-            driverName: entry.selectedDriverName,
-          })),
-        }),
-      });
+      const jobChunks = splitEntriesIntoJobChunks(entries);
 
-      const payload = (await response.json()) as {
-        error?: string;
-        job?: SessionImportJobSummary;
-      };
+      for (const chunk of jobChunks) {
+        const response = await fetch('/api/session-import-jobs', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionTypeFilter,
+            sessions: chunk.map((entry) => ({
+              sessionName: entry.sessionName,
+              xmlContent: entry.xmlContent,
+              sourceFileName: entry.sourceFileName,
+              driverName: entry.selectedDriverName,
+            })),
+          }),
+        });
 
-      if (!response.ok || !payload.job) {
-        throw new Error(payload.error ?? 'import_job_failed');
+        const payload = (await response.json()) as {
+          error?: string;
+          job?: SessionImportJobSummary;
+        };
+
+        if (!response.ok || !payload.job) {
+          throw new Error(payload.error ?? 'import_job_failed');
+        }
+
+        onJobCreated?.(payload.job);
       }
-
-      onJobCreated?.(payload.job);
       setAllEntries([]);
     } catch (error) {
       const code = error instanceof Error ? error.message : 'import_job_failed';
       setSubmitError(
         code === 'empty_import_job'
           ? 'No hay XML válidos para encolar con el filtro actual.'
-          : 'No hemos podido iniciar la importación en segundo plano. Inténtalo de nuevo.',
+          : 'No hemos podido encolar todos los XML en segundo plano. Si eran muchos, prueba de nuevo y los enviaremos en varios bloques.',
       );
     } finally {
       setIsSubmitting(false);
