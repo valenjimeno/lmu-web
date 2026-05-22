@@ -39,6 +39,13 @@ type ProcessSessionImportJobInput = {
   chunkSize?: number;
 };
 
+type DrainSessionImportJobInput = {
+  ownerUserId: string;
+  jobId: string;
+  chunkSize?: number;
+  maxIterations?: number;
+};
+
 export type SessionImportJobSummary = {
   id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed';
@@ -74,6 +81,8 @@ const terminalImportErrorCodes = new Set([
   'filtered_session_type',
   'missing_storage_source',
 ]);
+
+const STALE_SESSION_IMPORT_JOB_THRESHOLD_MS = 15 * 60 * 1000;
 
 function buildNotificationPayload(job: SessionImportJobRow) {
   const title =
@@ -168,6 +177,43 @@ async function getSessionImportJobRow(ownerUserId: string, jobId: string) {
   }
 
   return (result.data as SessionImportJobRow | null) ?? null;
+}
+
+async function markSessionImportJobAsAbandoned(ownerUserId: string, jobId: string) {
+  const supabase = await createClient();
+  const processedAt = new Date().toISOString();
+
+  const itemsResult = await supabase
+    .from('session_import_job_items')
+    .update({
+      status: 'failed',
+      error_code: 'job_abandoned',
+      error_message: 'The import job was marked as abandoned after staying active for too long.',
+      processed_at: processedAt,
+    })
+    .eq('owner_user_id', ownerUserId)
+    .eq('job_id', jobId)
+    .in('status', ['queued', 'processing']);
+
+  if (itemsResult.error) {
+    throw itemsResult.error;
+  }
+
+  return refreshSessionImportJobCounters(ownerUserId, jobId);
+}
+
+function isSessionImportJobStale(job: SessionImportJobRow) {
+  if (job.status !== 'queued' && job.status !== 'processing') {
+    return false;
+  }
+
+  const activityTimestamp = Date.parse(job.started_at ?? job.created_at);
+
+  if (Number.isNaN(activityTimestamp)) {
+    return false;
+  }
+
+  return Date.now() - activityTimestamp >= STALE_SESSION_IMPORT_JOB_THRESHOLD_MS;
 }
 
 async function refreshSessionImportJobCounters(ownerUserId: string, jobId: string) {
@@ -563,6 +609,29 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
   };
 }
 
+export async function drainSessionImportJob(input: DrainSessionImportJobInput) {
+  const maxIterations = Math.max(1, Math.min(input.maxIterations ?? 25, 100));
+  let lastResult: {
+    job: SessionImportJobSummary;
+    processedCount: number;
+    hasMoreWork: boolean;
+  } | null = null;
+
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    lastResult = await processSessionImportJob({
+      ownerUserId: input.ownerUserId,
+      jobId: input.jobId,
+      chunkSize: input.chunkSize,
+    });
+
+    if (!lastResult.hasMoreWork) {
+      return lastResult;
+    }
+  }
+
+  return lastResult;
+}
+
 export async function getRecentSessionImportJobs(ownerUserId: string, limit = 6) {
   const supabase = await createClient();
   const result = await supabase
@@ -580,5 +649,21 @@ export async function getRecentSessionImportJobs(ownerUserId: string, limit = 6)
     throw result.error;
   }
 
-  return ((result.data ?? []) as SessionImportJobRow[]).map(mapJobRowToSummary);
+  const jobs = ((result.data ?? []) as SessionImportJobRow[]).slice();
+  const refreshedJobs = await Promise.all(
+    jobs.map(async (job) =>
+      isSessionImportJobStale(job)
+        ? getSessionImportJobRow(ownerUserId, job.id).then(async (currentJob) => {
+            if (!currentJob || !isSessionImportJobStale(currentJob)) {
+              return currentJob ?? job;
+            }
+
+            await markSessionImportJobAsAbandoned(ownerUserId, currentJob.id);
+            return (await getSessionImportJobRow(ownerUserId, currentJob.id)) ?? currentJob;
+          })
+        : job,
+    ),
+  );
+
+  return refreshedJobs.filter(Boolean).map((job) => mapJobRowToSummary(job as SessionImportJobRow));
 }

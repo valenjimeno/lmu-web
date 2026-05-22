@@ -109,8 +109,6 @@ function ImportSessionsFormBody({
   entries,
   ignoredFiles,
   handleFileChange,
-  handleRemoveEntry,
-  handleSessionNameChange,
   handleDriverChange,
   canSubmit,
   submitLabel,
@@ -127,13 +125,20 @@ function ImportSessionsFormBody({
     detectedSessionType: string | null;
   }>;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
-  handleRemoveEntry: (entryId: string) => void;
-  handleSessionNameChange: (entryId: string, value: string) => void;
   handleDriverChange: (entryId: string, value: string) => void;
   canSubmit: boolean;
   submitLabel: string;
   isSubmitting: boolean;
 }) {
+  const autoMatchedCount = entries.filter((entry) => entry.matchState === 'matched').length;
+  const needsSelectionEntries = entries.filter((entry) => entry.matchState === 'needs-selection');
+  const duplicateCount = entries.filter((entry) => entry.duplicateReason !== null).length;
+  const sessionTypeCounts = entries.reduce((counts, entry) => {
+    const key = entry.sessionType ?? 'unknown';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+
   return (
     <fieldset
       className="space-y-4 disabled:pointer-events-none disabled:opacity-75"
@@ -171,8 +176,36 @@ function ImportSessionsFormBody({
       </p>
 
       {entries.length > 0 ? (
-        <div className="rounded-[1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/78">
-          {entries.length} XML preparados para importar.
+        <div className="space-y-3 rounded-[1rem] border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/78">
+              {entries.length} XML preparados
+            </span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/[0.08] px-3 py-1 text-xs text-emerald-100">
+              {autoMatchedCount} con piloto detectado
+            </span>
+            {needsSelectionEntries.length > 0 ? (
+              <span className="rounded-full border border-amber-400/20 bg-amber-500/[0.08] px-3 py-1 text-xs text-amber-100">
+                {needsSelectionEntries.length} requieren elección de piloto
+              </span>
+            ) : null}
+            {duplicateCount > 0 ? (
+              <span className="rounded-full border border-[#ff6b5730] bg-[#ff6b570a] px-3 py-1 text-xs text-[#f3b4aa]">
+                {duplicateCount} duplicados bloqueados
+              </span>
+            ) : null}
+          </div>
+          <div className="grid gap-2 text-sm text-white/72 sm:grid-cols-2">
+            {Array.from(sessionTypeCounts.entries()).map(([sessionType, count]) => (
+              <p key={sessionType}>
+                {count} {formatSessionType(sessionType)}
+              </p>
+            ))}
+          </div>
+          <p className="text-xs leading-6 text-muted">
+            La selección se gestiona como lote completo. Si quieres cambiar los ficheros, vuelve a
+            abrir el selector y elige el conjunto definitivo.
+          </p>
         </div>
       ) : null}
 
@@ -195,83 +228,49 @@ function ImportSessionsFormBody({
         </div>
       ) : null}
 
-      <div className="space-y-3">
-        {entries.map((entry) => (
-          <article
-            key={entry.id}
-            className="space-y-3 rounded-[1.1rem] border border-white/10 bg-white/[0.03] p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-white">{entry.sourceFileName}</p>
-                <p className="mt-1 text-xs text-muted">
-                  Tipo detectado: {formatSessionType(entry.sessionType)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemoveEntry(entry.id)}
-                className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-muted transition hover:text-white"
-              >
-                Quitar
-              </button>
-            </div>
+      {entries.some((entry) => entry.duplicateReason === 'already-imported') ? (
+        <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
+          Hay XML que ya estaban importados anteriormente. Esos duplicados bloquean el envío del
+          lote hasta que cambies la selección de ficheros.
+        </div>
+      ) : null}
 
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foreground">Nombre de la sesión</span>
-              <input
-                type="text"
-                value={entry.sessionName}
-                onChange={(event) => handleSessionNameChange(entry.id, event.target.value)}
-                placeholder="Spa 20 min carrera"
+      {entries.some((entry) => entry.duplicateReason === 'selected-more-than-once') ? (
+        <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
+          Has seleccionado el mismo XML más de una vez dentro del lote. Vuelve a abrir el selector y
+          deja solo una copia de cada fichero.
+        </div>
+      ) : null}
+
+      {needsSelectionEntries.length > 0 ? (
+        <div className="space-y-3 rounded-[1rem] border border-amber-400/20 bg-amber-500/[0.08] p-4">
+          <p className="text-sm text-amber-100">
+            Hay {needsSelectionEntries.length} fichero
+            {needsSelectionEntries.length === 1 ? '' : 's'} en los que no hemos podido encontrar tu
+            piloto automáticamente. Solo mostramos esos casos para que completes la selección.
+          </p>
+
+          {needsSelectionEntries.map((entry) => (
+            <label key={entry.id} className="block space-y-2">
+              <span className="text-sm font-medium text-foreground">
+                {entry.sourceFileName} · {formatSessionType(entry.sessionType)}
+              </span>
+              <select
+                value={entry.selectedDriverName}
+                onChange={(event) => handleDriverChange(entry.id, event.target.value)}
                 className={inputClassName}
-              />
+              >
+                <option value="">Selecciona un piloto</option>
+                {entry.availableDriverNames.map((driverName) => (
+                  <option key={driverName} value={driverName}>
+                    {driverName}
+                  </option>
+                ))}
+              </select>
             </label>
-
-            {entry.matchState === 'matched' ? (
-              <div className="rounded-[1rem] border border-emerald-400/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
-                Piloto detectado automáticamente: <strong>{entry.selectedDriverName}</strong>
-              </div>
-            ) : null}
-
-            {entry.duplicateReason === 'already-imported' ? (
-              <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
-                Este XML ya estaba importado anteriormente. No se puede volver a subir.
-              </div>
-            ) : null}
-
-            {entry.duplicateReason === 'selected-more-than-once' ? (
-              <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
-                Has seleccionado este mismo XML más de una vez en el mismo lote.
-              </div>
-            ) : null}
-
-            {entry.matchState === 'needs-selection' ? (
-              <div className="space-y-3 rounded-[1rem] border border-amber-400/20 bg-amber-500/[0.08] px-4 py-4">
-                <p className="text-sm text-amber-100">
-                  No hemos encontrado tu piloto automáticamente en este fichero. Elige qué nombre
-                  quieres importar.
-                </p>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-foreground">Piloto a importar</span>
-                  <select
-                    value={entry.selectedDriverName}
-                    onChange={(event) => handleDriverChange(entry.id, event.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="">Selecciona un piloto</option>
-                    {entry.availableDriverNames.map((driverName) => (
-                      <option key={driverName} value={driverName}>
-                        {driverName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
       <ImportSessionsSubmitButton
         canSubmit={canSubmit}
@@ -458,19 +457,6 @@ export function ImportSessionsForm({
     setAllEntries(builtEntries);
   }
 
-  function handleSessionNameChange(entryId: string, value: string) {
-    setAllEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        entry.id === entryId
-          ? {
-              ...entry,
-              sessionName: value,
-            }
-          : entry,
-      ),
-    );
-  }
-
   function handleDriverChange(entryId: string, value: string) {
     setAllEntries((currentEntries) =>
       currentEntries.map((entry) =>
@@ -482,10 +468,6 @@ export function ImportSessionsForm({
           : entry,
       ),
     );
-  }
-
-  function handleRemoveEntry(entryId: string) {
-    setAllEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId));
   }
 
   const invalidEntriesCount = entries.filter((entry) => entry.matchState === 'invalid').length;
@@ -651,8 +633,6 @@ export function ImportSessionsForm({
         entries={entries}
         ignoredFiles={ignoredFiles}
         handleFileChange={handleFileChange}
-        handleRemoveEntry={handleRemoveEntry}
-        handleSessionNameChange={handleSessionNameChange}
         handleDriverChange={handleDriverChange}
         canSubmit={canSubmit}
         submitLabel={submitLabel}

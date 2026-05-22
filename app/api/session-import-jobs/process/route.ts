@@ -1,9 +1,8 @@
-import { after } from 'next/server';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/supabase/auth';
-import { processSessionImportJob } from '@/services/session-import-job.service';
+import { drainSessionImportJob } from '@/services/session-import-job.service';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -29,26 +28,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await processSessionImportJob({
+    const result = await drainSessionImportJob({
       ownerUserId: user.id,
       jobId,
+      chunkSize: 10,
+      maxIterations: 25,
     });
-
-    if (result.hasMoreWork) {
-      const origin = new URL(request.url).origin;
-      const cookieHeader = request.headers.get('cookie') ?? '';
-
-      after(async () => {
-        await fetch(`${origin}/api/session-import-jobs/process`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            cookie: cookieHeader,
-          },
-          body: JSON.stringify({ jobId }),
-        });
-      });
-    }
 
     return NextResponse.json(result);
   } catch (error) {

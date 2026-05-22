@@ -4,9 +4,12 @@ import { getCurrentUser } from '@/lib/supabase/auth';
 import type { SessionTypeFilter } from '@/lib/utils/session-type';
 import {
   createSessionImportJob,
+  drainSessionImportJob,
   getRecentSessionImportJobs,
   isMissingSessionImportJobsTableError,
 } from '@/services/session-import-job.service';
+
+export const maxDuration = 300;
 
 function resolveSessionTypeFilter(value: unknown): SessionTypeFilter {
   const normalizedValue = String(value ?? 'all')
@@ -86,17 +89,12 @@ export async function POST(request: NextRequest) {
       })),
     });
 
-    const origin = new URL(request.url).origin;
-    const cookieHeader = request.headers.get('cookie') ?? '';
-
     after(async () => {
-      await fetch(`${origin}/api/session-import-jobs/process`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          cookie: cookieHeader,
-        },
-        body: JSON.stringify({ jobId: job.id }),
+      await drainSessionImportJob({
+        ownerUserId: user.id,
+        jobId: job.id,
+        chunkSize: 10,
+        maxIterations: 25,
       });
     });
 
