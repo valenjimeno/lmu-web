@@ -7,7 +7,6 @@ import {
   getRecentSessionImportJobs,
   isMissingSessionImportJobsTableError,
 } from '@/services/session-import-job.service';
-import { importSetupSessionsBatch } from '@/services/setup-session.service';
 
 function resolveSessionTypeFilter(value: unknown): SessionTypeFilter {
   const normalizedValue = String(value ?? 'all')
@@ -47,9 +46,14 @@ export async function POST(request: NextRequest) {
   let payload: {
     sessions?: Array<{
       sessionName?: string;
-      xmlContent?: string;
+      sourceFileHash?: string;
       sourceFileName?: string | null;
+      sourceFileSizeBytes?: number | null;
+      sourceMimeType?: string | null;
+      storageBucket?: string;
+      storagePath?: string;
       driverName?: string;
+      detectedSessionType?: string | null;
     }>;
     sessionTypeFilter?: string;
   };
@@ -68,9 +72,17 @@ export async function POST(request: NextRequest) {
       sessionTypeFilter: resolveSessionTypeFilter(payload.sessionTypeFilter),
       sessions: sessions.map((session) => ({
         sessionName: String(session.sessionName ?? ''),
-        xmlContent: String(session.xmlContent ?? ''),
+        sourceFileHash: String(session.sourceFileHash ?? ''),
         sourceFileName: session.sourceFileName ? String(session.sourceFileName) : null,
+        sourceFileSizeBytes:
+          typeof session.sourceFileSizeBytes === 'number' ? session.sourceFileSizeBytes : null,
+        sourceMimeType: session.sourceMimeType ? String(session.sourceMimeType) : null,
+        storageBucket: String(session.storageBucket ?? ''),
+        storagePath: String(session.storagePath ?? ''),
         driverName: String(session.driverName ?? ''),
+        detectedSessionType: session.detectedSessionType
+          ? String(session.detectedSessionType)
+          : null,
       })),
     });
 
@@ -91,50 +103,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ job }, { status: 202 });
   } catch (error) {
     if (isMissingSessionImportJobsTableError(error)) {
-      try {
-        const sessionTypeFilter = resolveSessionTypeFilter(payload.sessionTypeFilter);
-        const normalizedSessions = sessions.map((session) => ({
-          sessionName: String(session.sessionName ?? '').trim(),
-          xmlContent: String(session.xmlContent ?? '').trim(),
-          sourceFileName: session.sourceFileName ? String(session.sourceFileName).trim() : null,
-          driverName: String(session.driverName ?? '').trim(),
-        }));
-        const result = await importSetupSessionsBatch({
-          ownerUserId: user.id,
-          sessionTypeFilter,
-          sessions: normalizedSessions.filter(
-            (session) => session.sessionName && session.xmlContent && session.driverName,
-          ),
-        });
-
-        const now = new Date().toISOString();
-        return NextResponse.json(
-          {
-            job: {
-              id: `fallback-${now}`,
-              status: 'completed',
-              sessionTypeFilter,
-              totalCount: normalizedSessions.length,
-              queuedCount: 0,
-              processingCount: 0,
-              completedCount: result.importedCount,
-              failedCount: 0,
-              duplicateCount: 0,
-              invalidCount: 0,
-              filteredCount: Math.max(normalizedSessions.length - result.importedCount, 0),
-              createdAt: now,
-              startedAt: now,
-              completedAt: now,
-            },
-            fallbackMode: 'sync',
-          },
-          { status: 200 },
-        );
-      } catch (fallbackError) {
-        const fallbackMessage =
-          fallbackError instanceof Error ? fallbackError.message : 'import_job_fallback_failed';
-        return NextResponse.json({ error: fallbackMessage }, { status: 500 });
-      }
+      return NextResponse.json({ error: 'async_import_unavailable' }, { status: 503 });
     }
 
     const message = error instanceof Error ? error.message : 'import_job_failed';

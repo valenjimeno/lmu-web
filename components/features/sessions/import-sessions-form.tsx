@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useMemo, useState } from 'react';
 import {
   computeXmlHash,
@@ -9,6 +9,8 @@ import {
   type MatchState,
 } from '@/components/features/sessions/import-session-client';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/client';
+import { buildSessionImportStoragePath } from '@/lib/utils/session-import-storage';
 import {
   detectSessionTypeFromXml,
   doesSessionTypeMatchFilter,
@@ -28,9 +30,11 @@ type ImportSessionsFormProps = {
 
 type SessionImportEntry = {
   id: string;
+  file: File;
   sessionName: string;
   sourceFileName: string;
-  xmlContent: string;
+  sourceFileSizeBytes: number;
+  sourceMimeType: string | null;
   xmlHash: string;
   availableDriverNames: string[];
   selectedDriverName: string;
@@ -39,14 +43,32 @@ type SessionImportEntry = {
   duplicateReason: 'already-imported' | 'selected-more-than-once' | null;
 };
 
+type UploadedSessionImportSource = {
+  sessionName: string;
+  sourceFileHash: string;
+  sourceFileName: string;
+  sourceFileSizeBytes: number;
+  sourceMimeType: string | null;
+  storageBucket: string;
+  storagePath: string;
+  driverName: string;
+  detectedSessionType: string | null;
+};
+
 const sessionTypeFilterOptions: SessionTypeFilter[] = ['all', 'race', 'qualify', 'practice'];
-const MAX_JOB_CHUNK_FILES = 8;
-const MAX_JOB_CHUNK_BYTES = 750_000;
+const MAX_JOB_CHUNK_FILES = 24;
+const MAX_UPLOAD_CONCURRENCY = 3;
 
 const inputClassName =
   'input-surface w-full rounded-[1rem] px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
 
-function ImportSessionsPendingState({ isSubmitting }: { isSubmitting: boolean }) {
+function ImportSessionsPendingState({
+  isSubmitting,
+  message,
+}: {
+  isSubmitting: boolean;
+  message: string;
+}) {
   if (!isSubmitting) {
     return null;
   }
@@ -58,10 +80,7 @@ function ImportSessionsPendingState({ isSubmitting }: { isSubmitting: boolean })
           <span className="h-7 w-7 animate-spin rounded-full border-2 border-[rgba(241,196,135,0.25)] border-t-[#f3d2a6]" />
         </div>
         <h3 className="mt-5 text-lg font-semibold text-white">Importando sesiones</h3>
-        <p className="mt-2 text-sm leading-6 text-white/72">
-          Estamos procesando los XML seleccionados. Mientras termina, bloqueamos la interacción para
-          evitar importaciones duplicadas.
-        </p>
+        <p className="mt-2 text-sm leading-6 text-white/72">{message}</p>
       </div>
     </div>
   );
@@ -78,7 +97,7 @@ function ImportSessionsSubmitButton({
 }) {
   return (
     <Button type="submit" disabled={!canSubmit || isSubmitting} className="w-full sm:w-auto">
-      {isSubmitting ? 'Encolando importación...' : submitLabel}
+      {isSubmitting ? 'Preparando importacion...' : submitLabel}
     </Button>
   );
 }
@@ -271,30 +290,11 @@ function getDefaultSessionName(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || fileName;
 }
 
-function splitEntriesIntoJobChunks(entries: SessionImportEntry[]) {
-  const chunks: SessionImportEntry[][] = [];
-  let currentChunk: SessionImportEntry[] = [];
-  let currentChunkBytes = 0;
+function chunkEntries<T>(entries: T[], chunkSize: number) {
+  const chunks: T[][] = [];
 
-  for (const entry of entries) {
-    const entryBytes =
-      entry.xmlContent.length + entry.sessionName.length + entry.sourceFileName.length + 256;
-    const wouldExceedChunkSize =
-      currentChunk.length >= MAX_JOB_CHUNK_FILES ||
-      (currentChunk.length > 0 && currentChunkBytes + entryBytes > MAX_JOB_CHUNK_BYTES);
-
-    if (wouldExceedChunkSize) {
-      chunks.push(currentChunk);
-      currentChunk = [];
-      currentChunkBytes = 0;
-    }
-
-    currentChunk.push(entry);
-    currentChunkBytes += entryBytes;
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
+  for (let index = 0; index < entries.length; index += chunkSize) {
+    chunks.push(entries.slice(index, index + chunkSize));
   }
 
   return chunks;
@@ -349,9 +349,11 @@ async function buildImportEntry(
 
   return {
     id: buildEntryId(file.name, xmlHash, index),
+    file,
     sessionName: getDefaultSessionName(file.name),
     sourceFileName: file.name,
-    xmlContent,
+    sourceFileSizeBytes: file.size,
+    sourceMimeType: file.type || null,
     xmlHash,
     availableDriverNames,
     selectedDriverName,
@@ -359,6 +361,27 @@ async function buildImportEntry(
     matchState,
     duplicateReason: null,
   };
+}
+
+async function removeUploadedSources(uploadedSources: UploadedSessionImportSource[]) {
+  if (uploadedSources.length === 0) {
+    return;
+  }
+
+  const supabase = createClient();
+  const sourcesByBucket = new Map<string, string[]>();
+
+  for (const source of uploadedSources) {
+    const bucketPaths = sourcesByBucket.get(source.storageBucket) ?? [];
+    bucketPaths.push(source.storagePath);
+    sourcesByBucket.set(source.storageBucket, bucketPaths);
+  }
+
+  await Promise.all(
+    Array.from(sourcesByBucket.entries()).map(async ([bucket, paths]) => {
+      await supabase.storage.from(bucket).remove(paths);
+    }),
+  );
 }
 
 export function ImportSessionsForm({
@@ -372,6 +395,9 @@ export function ImportSessionsForm({
   const [sessionTypeFilter, setSessionTypeFilter] = useState<SessionTypeFilter>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState(
+    'Estamos preparando la importación en segundo plano.',
+  );
   const importedSessionHashSet = useMemo(
     () => new Set(importedSessionHashes),
     [importedSessionHashes],
@@ -476,7 +502,57 @@ export function ImportSessionsForm({
           (entry.matchState === 'needs-selection' && entry.selectedDriverName.trim().length > 0)),
     );
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function uploadEntriesToStorage(
+    sourceEntries: SessionImportEntry[],
+    ownerUserId: string,
+  ): Promise<UploadedSessionImportSource[]> {
+    const supabase = createClient();
+    const uploadedSources: UploadedSessionImportSource[] = [];
+
+    for (const batch of chunkEntries(sourceEntries, MAX_UPLOAD_CONCURRENCY)) {
+      const uploadedBatch = await Promise.all(
+        batch.map(async (entry) => {
+          const storageTarget = buildSessionImportStoragePath({
+            ownerUserId,
+            fileName: entry.sourceFileName,
+            sourceFileHash: entry.xmlHash,
+            uploadId: crypto.randomUUID(),
+          });
+          const uploadResult = await supabase.storage
+            .from(storageTarget.bucket)
+            .upload(storageTarget.path, entry.file, {
+              contentType: entry.sourceMimeType ?? 'application/xml',
+              upsert: false,
+            });
+
+          if (uploadResult.error) {
+            throw uploadResult.error;
+          }
+
+          return {
+            sessionName: entry.sessionName.trim(),
+            sourceFileHash: entry.xmlHash,
+            sourceFileName: entry.sourceFileName,
+            sourceFileSizeBytes: entry.sourceFileSizeBytes,
+            sourceMimeType: entry.sourceMimeType,
+            storageBucket: storageTarget.bucket,
+            storagePath: storageTarget.path,
+            driverName: entry.selectedDriverName.trim(),
+            detectedSessionType: entry.sessionType,
+          } satisfies UploadedSessionImportSource;
+        }),
+      );
+
+      uploadedSources.push(...uploadedBatch);
+      setPendingMessage(
+        `Hemos subido ${uploadedSources.length} de ${sourceEntries.length} XML al almacenamiento seguro. Ahora seguiremos en segundo plano.`,
+      );
+    }
+
+    return uploadedSources;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!canSubmit || isSubmitting) {
@@ -485,11 +561,31 @@ export function ImportSessionsForm({
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setPendingMessage('Subiendo XML al almacenamiento seguro para procesarlos totalmente en back.');
+
+    const supabase = createClient();
+    const uploadedSources: UploadedSessionImportSource[] = [];
+    const committedSourceKeys = new Set<string>();
 
     try {
-      const jobChunks = splitEntriesIntoJobChunks(entries);
+      const userResult = await supabase.auth.getUser();
+      const ownerUserId = userResult.data.user?.id;
 
-      for (const chunk of jobChunks) {
+      if (!ownerUserId) {
+        throw new Error('unauthorized');
+      }
+
+      uploadedSources.push(...(await uploadEntriesToStorage(entries, ownerUserId)));
+      setPendingMessage('Creando la cola de importación para que el backend procese los XML.');
+
+      const jobChunks = chunkEntries(uploadedSources, MAX_JOB_CHUNK_FILES);
+
+      for (let index = 0; index < jobChunks.length; index += 1) {
+        const chunk = jobChunks[index];
+        setPendingMessage(
+          `Encolando lote ${index + 1} de ${jobChunks.length}. Después la importación continuará en segundo plano sin depender de esta pestaña.`,
+        );
+
         const response = await fetch('/api/session-import-jobs', {
           method: 'POST',
           headers: {
@@ -497,12 +593,7 @@ export function ImportSessionsForm({
           },
           body: JSON.stringify({
             sessionTypeFilter,
-            sessions: chunk.map((entry) => ({
-              sessionName: entry.sessionName,
-              xmlContent: entry.xmlContent,
-              sourceFileName: entry.sourceFileName,
-              driverName: entry.selectedDriverName,
-            })),
+            sessions: chunk,
           }),
         });
 
@@ -515,15 +606,29 @@ export function ImportSessionsForm({
           throw new Error(payload.error ?? 'import_job_failed');
         }
 
+        for (const source of chunk) {
+          committedSourceKeys.add(`${source.storageBucket}:${source.storagePath}`);
+        }
+
         onJobCreated?.(payload.job);
       }
+
       setAllEntries([]);
     } catch (error) {
+      await removeUploadedSources(
+        uploadedSources.filter(
+          (source) => !committedSourceKeys.has(`${source.storageBucket}:${source.storagePath}`),
+        ),
+      );
       const code = error instanceof Error ? error.message : 'import_job_failed';
       setSubmitError(
-        code === 'empty_import_job'
-          ? 'No hay XML válidos para encolar con el filtro actual.'
-          : 'No hemos podido encolar todos los XML en segundo plano. Si eran muchos, prueba de nuevo y los enviaremos en varios bloques.',
+        code === 'unauthorized'
+          ? 'Tu sesión ha caducado. Recarga la página e inténtalo de nuevo.'
+          : code === 'async_import_unavailable'
+            ? 'La cola de importación no está disponible todavía en este entorno. La base está preparada para funcionar totalmente en segundo plano, pero aquí aún no podemos activarla.'
+            : code === 'empty_import_job'
+              ? 'No hay XML válidos para encolar con el filtro actual.'
+              : 'No hemos podido dejar todos los XML preparados en segundo plano. No se ha iniciado la importación y hemos limpiado los ficheros temporales subidos.',
       );
     } finally {
       setIsSubmitting(false);
@@ -532,7 +637,7 @@ export function ImportSessionsForm({
 
   return (
     <form onSubmit={handleSubmit} className="relative space-y-4">
-      <ImportSessionsPendingState isSubmitting={isSubmitting} />
+      <ImportSessionsPendingState isSubmitting={isSubmitting} message={pendingMessage} />
       <input type="hidden" name="returnTo" value={returnTo ?? '/sesiones'} />
       {submitError ? (
         <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">

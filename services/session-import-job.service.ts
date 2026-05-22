@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import {
   detectSessionTypeFromXml,
   doesSessionTypeMatchFilter,
   type SessionTypeFilter,
 } from '@/lib/utils/session-type';
+import { downloadSessionImportSourceXml } from '@/services/session-import-storage.service';
 import { importSetupSession } from '@/services/setup-session.service';
-import type { Database } from '@/types/database.types';
+import type { Database, Json } from '@/types/database.types';
 
 type SessionImportJobRow = Database['public']['Tables']['session_import_jobs']['Row'];
 type SessionImportJobInsert = Database['public']['Tables']['session_import_jobs']['Insert'];
@@ -19,9 +19,14 @@ type CreateSessionImportJobInput = {
   sessionTypeFilter: SessionTypeFilter;
   sessions: Array<{
     sessionName: string;
-    xmlContent: string;
+    sourceFileHash: string;
     sourceFileName?: string | null;
+    sourceFileSizeBytes?: number | null;
+    sourceMimeType?: string | null;
+    storageBucket: string;
+    storagePath: string;
     driverName: string;
+    detectedSessionType?: string | null;
   }>;
 };
 
@@ -49,9 +54,35 @@ export type SessionImportJobSummary = {
 };
 
 const sessionImportJobSelect =
-  'id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at';
+  'id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at, notification_status, notification_payload, notified_at';
 
-const invalidImportErrorCodes = new Set(['empty_xml', 'invalid_xml', 'driver_not_found']);
+const invalidImportErrorCodes = new Set([
+  'empty_xml',
+  'invalid_xml',
+  'driver_not_found',
+  'missing_storage_source',
+]);
+
+function buildNotificationPayload(job: SessionImportJobRow) {
+  const title =
+    job.status === 'completed'
+      ? 'Importacion de sesiones completada'
+      : job.status === 'failed'
+        ? 'Importacion de sesiones finalizada con errores'
+        : 'Importacion de sesiones en progreso';
+
+  return {
+    title,
+    summary: {
+      totalCount: job.total_count,
+      completedCount: job.completed_count,
+      failedCount: job.failed_count,
+      duplicateCount: job.duplicate_count,
+      invalidCount: job.invalid_count,
+      filteredCount: job.filtered_count,
+    },
+  } satisfies Json;
+}
 
 export function isMissingSessionImportJobsTableError(error: unknown) {
   if (!error || typeof error !== 'object') {
@@ -68,10 +99,6 @@ export function isMissingSessionImportJobsTableError(error: unknown) {
     typeof candidate.message === 'string' &&
     candidate.message.includes('session_import_jobs')
   );
-}
-
-function computeSourceFileHash(xmlContent: string) {
-  return createHash('sha256').update(xmlContent).digest('hex');
 }
 
 function mapJobRowToSummary(job: SessionImportJobRow): SessionImportJobSummary {
@@ -137,14 +164,14 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
   const items = (itemsResult.data ?? []) as Array<
     Pick<SessionImportJobItemRow, 'status' | 'error_code'>
   >;
-  const baseInvalidCount = Math.max(job.total_count - items.length - job.filtered_count, 0);
 
   let queuedCount = 0;
   let processingCount = 0;
   let completedCount = 0;
   let failedCount = 0;
   let duplicateCount = 0;
-  let invalidCount = baseInvalidCount;
+  let invalidCount = Math.max(job.total_count - items.length, 0);
+  let filteredCount = 0;
 
   for (const item of items) {
     if (item.status === 'queued') {
@@ -167,6 +194,11 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
       continue;
     }
 
+    if (item.error_code === 'filtered_session_type') {
+      filteredCount += 1;
+      continue;
+    }
+
     if (item.error_code && invalidImportErrorCodes.has(item.error_code)) {
       invalidCount += 1;
       continue;
@@ -185,21 +217,26 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
           ? 'processing'
           : 'queued';
 
+  const updatedValues: SessionImportJobInsert = {
+    owner_user_id: ownerUserId,
+    status: nextStatus,
+    queued_count: queuedCount,
+    processing_count: processingCount,
+    completed_count: completedCount,
+    failed_count: failedCount,
+    duplicate_count: duplicateCount,
+    invalid_count: invalidCount,
+    filtered_count: filteredCount,
+    started_at:
+      job.started_at ??
+      (nextStatus === 'processing' || isFinished ? new Date().toISOString() : null),
+    completed_at: isFinished ? new Date().toISOString() : null,
+    notification_status: isFinished ? 'ready' : 'pending',
+  };
+
   const updateResult = await supabase
     .from('session_import_jobs')
-    .update({
-      status: nextStatus,
-      queued_count: queuedCount,
-      processing_count: processingCount,
-      completed_count: completedCount,
-      failed_count: failedCount,
-      duplicate_count: duplicateCount,
-      invalid_count: invalidCount,
-      started_at:
-        job.started_at ??
-        (nextStatus === 'processing' || isFinished ? new Date().toISOString() : null),
-      completed_at: isFinished ? new Date().toISOString() : null,
-    })
+    .update(updatedValues)
     .eq('owner_user_id', ownerUserId)
     .eq('id', jobId)
     .select(sessionImportJobSelect)
@@ -209,40 +246,49 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
     throw updateResult.error;
   }
 
-  return mapJobRowToSummary(updateResult.data as SessionImportJobRow);
+  const refreshedJob = updateResult.data as SessionImportJobRow;
+  const payloadUpdate = await supabase
+    .from('session_import_jobs')
+    .update({
+      notification_payload: buildNotificationPayload(refreshedJob),
+    })
+    .eq('owner_user_id', ownerUserId)
+    .eq('id', jobId)
+    .select(sessionImportJobSelect)
+    .single();
+
+  if (payloadUpdate.error) {
+    throw payloadUpdate.error;
+  }
+
+  return mapJobRowToSummary(payloadUpdate.data as SessionImportJobRow);
 }
 
 export async function createSessionImportJob(input: CreateSessionImportJobInput) {
   const normalizedSessions = input.sessions.map((session) => ({
     sessionName: session.sessionName.trim(),
-    xmlContent: session.xmlContent.trim(),
+    sourceFileHash: session.sourceFileHash.trim(),
     sourceFileName: session.sourceFileName?.trim() || null,
+    sourceFileSizeBytes:
+      typeof session.sourceFileSizeBytes === 'number' &&
+      Number.isFinite(session.sourceFileSizeBytes)
+        ? Math.max(0, Math.round(session.sourceFileSizeBytes))
+        : null,
+    sourceMimeType: session.sourceMimeType?.trim() || null,
+    storageBucket: session.storageBucket.trim(),
+    storagePath: session.storagePath.trim(),
     driverName: session.driverName.trim(),
+    detectedSessionType: session.detectedSessionType?.trim() || null,
   }));
 
-  const totalCount = normalizedSessions.length;
   const validSessions = normalizedSessions.filter(
     (session) =>
       session.sessionName &&
-      session.xmlContent &&
-      session.driverName &&
-      doesSessionTypeMatchFilter(
-        detectSessionTypeFromXml(session.xmlContent),
-        input.sessionTypeFilter,
-      ),
+      session.sourceFileHash &&
+      session.storageBucket &&
+      session.storagePath &&
+      session.driverName,
   );
-
-  const filteredCount = normalizedSessions.filter(
-    (session) =>
-      session.xmlContent &&
-      session.driverName &&
-      session.sessionName &&
-      !doesSessionTypeMatchFilter(
-        detectSessionTypeFromXml(session.xmlContent),
-        input.sessionTypeFilter,
-      ),
-  ).length;
-  const invalidCount = totalCount - validSessions.length - filteredCount;
 
   if (validSessions.length === 0) {
     throw new Error('empty_import_job');
@@ -253,14 +299,21 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
     owner_user_id: input.ownerUserId,
     status: 'queued',
     session_type_filter: input.sessionTypeFilter,
-    total_count: totalCount,
+    total_count: validSessions.length,
     queued_count: validSessions.length,
     processing_count: 0,
     completed_count: 0,
     failed_count: 0,
     duplicate_count: 0,
-    invalid_count: invalidCount,
-    filtered_count: filteredCount,
+    invalid_count: 0,
+    filtered_count: 0,
+    notification_status: 'pending',
+    notification_payload: {
+      title: 'Importacion de sesiones en cola',
+      summary: {
+        totalCount: validSessions.length,
+      },
+    },
   };
 
   const jobResult = await supabase
@@ -280,10 +333,14 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
     status: 'queued',
     session_name: session.sessionName,
     source_file_name: session.sourceFileName,
-    source_file_hash: computeSourceFileHash(session.xmlContent),
-    xml_content: session.xmlContent,
+    source_file_hash: session.sourceFileHash,
+    source_file_size_bytes: session.sourceFileSizeBytes,
+    source_mime_type: session.sourceMimeType,
+    storage_bucket: session.storageBucket,
+    storage_path: session.storagePath,
+    xml_content: null,
     driver_name: session.driverName,
-    detected_session_type: detectSessionTypeFromXml(session.xmlContent),
+    detected_session_type: session.detectedSessionType,
   }));
 
   const itemResult = await supabase.from('session_import_job_items').insert(itemInserts);
@@ -314,7 +371,9 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
   const itemsResult = await supabase
     .from('session_import_job_items')
-    .select('id, session_name, source_file_name, xml_content, driver_name')
+    .select(
+      'id, session_name, source_file_name, source_file_hash, storage_bucket, storage_path, driver_name',
+    )
     .eq('owner_user_id', input.ownerUserId)
     .eq('job_id', input.jobId)
     .eq('status', 'queued')
@@ -363,9 +422,44 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
   for (const item of items) {
     try {
+      if (!item.storage_bucket || !item.storage_path) {
+        throw new Error('missing_storage_source');
+      }
+
+      const xmlContent = await downloadSessionImportSourceXml({
+        bucket: item.storage_bucket,
+        path: item.storage_path,
+      });
+      const detectedSessionType = detectSessionTypeFromXml(xmlContent);
+
+      if (
+        !doesSessionTypeMatchFilter(
+          detectedSessionType,
+          job.session_type_filter as SessionTypeFilter,
+        )
+      ) {
+        const filteredResult = await supabase
+          .from('session_import_job_items')
+          .update({
+            status: 'failed',
+            error_code: 'filtered_session_type',
+            error_message: 'The XML session type does not match the job filter.',
+            processed_at: new Date().toISOString(),
+          })
+          .eq('owner_user_id', input.ownerUserId)
+          .eq('job_id', input.jobId)
+          .eq('id', item.id);
+
+        if (filteredResult.error) {
+          throw filteredResult.error;
+        }
+
+        continue;
+      }
+
       const importResult = await importSetupSession({
         ownerUserId: input.ownerUserId,
-        xmlContent: item.xml_content,
+        xmlContent,
         driverName: item.driver_name,
         sessionName: item.session_name,
         sourceFileName: item.source_file_name,

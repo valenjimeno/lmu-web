@@ -170,10 +170,14 @@ export type Database = {
           owner_user_id: string;
           processed_at: string | null;
           session_name: string;
+          source_file_size_bytes: number | null;
           source_file_hash: string;
           source_file_name: string | null;
+          source_mime_type: string | null;
+          storage_bucket: string;
+          storage_path: string | null;
           status: string;
-          xml_content: string;
+          xml_content: string | null;
         };
         Insert: {
           created_at?: string;
@@ -187,10 +191,14 @@ export type Database = {
           owner_user_id: string;
           processed_at?: string | null;
           session_name: string;
+          source_file_size_bytes?: number | null;
           source_file_hash: string;
           source_file_name?: string | null;
+          source_mime_type?: string | null;
+          storage_bucket?: string;
+          storage_path?: string | null;
           status?: string;
-          xml_content: string;
+          xml_content?: string | null;
         };
         Update: {
           created_at?: string;
@@ -204,10 +212,14 @@ export type Database = {
           owner_user_id?: string;
           processed_at?: string | null;
           session_name?: string;
+          source_file_size_bytes?: number | null;
           source_file_hash?: string;
           source_file_name?: string | null;
+          source_mime_type?: string | null;
+          storage_bucket?: string;
+          storage_path?: string | null;
           status?: string;
-          xml_content?: string;
+          xml_content?: string | null;
         };
         Relationships: [
           {
@@ -236,6 +248,9 @@ export type Database = {
           filtered_count: number;
           id: string;
           invalid_count: number;
+          notification_payload: Json;
+          notification_status: string;
+          notified_at: string | null;
           owner_user_id: string;
           processing_count: number;
           queued_count: number;
@@ -253,6 +268,9 @@ export type Database = {
           filtered_count?: number;
           id?: string;
           invalid_count?: number;
+          notification_payload?: Json;
+          notification_status?: string;
+          notified_at?: string | null;
           owner_user_id: string;
           processing_count?: number;
           queued_count?: number;
@@ -270,6 +288,9 @@ export type Database = {
           filtered_count?: number;
           id?: string;
           invalid_count?: number;
+          notification_payload?: Json;
+          notification_status?: string;
+          notified_at?: string | null;
           owner_user_id?: string;
           processing_count?: number;
           queued_count?: number;
