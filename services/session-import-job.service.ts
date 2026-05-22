@@ -4,7 +4,10 @@ import {
   doesSessionTypeMatchFilter,
   type SessionTypeFilter,
 } from '@/lib/utils/session-type';
-import { downloadSessionImportSourceXml } from '@/services/session-import-storage.service';
+import {
+  deleteSessionImportSource,
+  downloadSessionImportSourceXml,
+} from '@/services/session-import-storage.service';
 import { importSetupSession } from '@/services/setup-session.service';
 import type { Database, Json } from '@/types/database.types';
 
@@ -63,6 +66,15 @@ const invalidImportErrorCodes = new Set([
   'missing_storage_source',
 ]);
 
+const terminalImportErrorCodes = new Set([
+  'duplicate_session',
+  'empty_xml',
+  'invalid_xml',
+  'driver_not_found',
+  'filtered_session_type',
+  'missing_storage_source',
+]);
+
 function buildNotificationPayload(job: SessionImportJobRow) {
   const title =
     job.status === 'completed'
@@ -118,6 +130,28 @@ function mapJobRowToSummary(job: SessionImportJobRow): SessionImportJobSummary {
     startedAt: job.started_at,
     completedAt: job.completed_at,
   };
+}
+
+async function cleanupSessionImportSource(input: {
+  storageBucket: string | null;
+  storagePath: string | null;
+}) {
+  if (!input.storageBucket || !input.storagePath) {
+    return;
+  }
+
+  try {
+    await deleteSessionImportSource({
+      bucket: input.storageBucket,
+      path: input.storagePath,
+    });
+  } catch (error) {
+    console.error('Failed to clean up session import source', {
+      bucket: input.storageBucket,
+      path: input.storagePath,
+      error,
+    });
+  }
 }
 
 async function getSessionImportJobRow(ownerUserId: string, jobId: string) {
@@ -454,6 +488,11 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
           throw filteredResult.error;
         }
 
+        await cleanupSessionImportSource({
+          storageBucket: item.storage_bucket,
+          storagePath: item.storage_path,
+        });
+
         continue;
       }
 
@@ -481,6 +520,11 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
       if (completeResult.error) {
         throw completeResult.error;
       }
+
+      await cleanupSessionImportSource({
+        storageBucket: item.storage_bucket,
+        storagePath: item.storage_path,
+      });
     } catch (error) {
       const errorCode = error instanceof Error ? error.message : 'import_failed';
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -499,6 +543,13 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
       if (failedResult.error) {
         throw failedResult.error;
+      }
+
+      if (terminalImportErrorCodes.has(errorCode)) {
+        await cleanupSessionImportSource({
+          storageBucket: item.storage_bucket,
+          storagePath: item.storage_path,
+        });
       }
     }
   }
