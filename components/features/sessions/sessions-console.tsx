@@ -93,6 +93,7 @@ export function SessionsConsole({
   const [polledSessionImportJobs, setPolledSessionImportJobs] = useState<SessionImportJobSummary[]>(
     [],
   );
+  const [transientFinishedJobId, setTransientFinishedJobId] = useState<string | null>(null);
   const filterFormKey = useMemo(
     () =>
       JSON.stringify({
@@ -161,6 +162,15 @@ export function SessionsConsole({
     () => sessionImportJobs.filter((job) => job.status === 'queued' || job.status === 'processing'),
     [sessionImportJobs],
   );
+  const latestActiveImportJob = activeImportJobs[0] ?? null;
+  const transientFinishedJob = useMemo(() => {
+    if (!transientFinishedJobId) {
+      return null;
+    }
+
+    return sessionImportJobs.find((job) => job.id === transientFinishedJobId) ?? null;
+  }, [sessionImportJobs, transientFinishedJobId]);
+  const visibleImportJob = latestActiveImportJob ?? transientFinishedJob;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentHref = useMemo(() => {
@@ -219,6 +229,7 @@ export function SessionsConsole({
         });
 
         if (finishedJob) {
+          setTransientFinishedJobId(finishedJob.id);
           router.refresh();
         }
       } catch {
@@ -232,6 +243,23 @@ export function SessionsConsole({
       window.clearInterval(intervalId);
     };
   }, [activeImportJobs.length, router, sessionImportJobs]);
+
+  useEffect(() => {
+    if (!transientFinishedJobId || latestActiveImportJob) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setTransientFinishedJobId((currentJobId) =>
+        currentJobId === transientFinishedJobId ? null : currentJobId,
+      );
+      setPolledSessionImportJobs((currentJobs) =>
+        currentJobs.filter((job) => job.id !== transientFinishedJobId),
+      );
+    }, 6000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [latestActiveImportJob, transientFinishedJobId]);
 
   const buildSessionsPageHref = useCallback(
     (nextPage: number, nextFilters: SessionConsoleFilters = filters) => {
@@ -291,52 +319,51 @@ export function SessionsConsole({
         </div>
       ) : null}
 
-      {sessionImportJobs.length > 0 ? (
+      {visibleImportJob ? (
         <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-4 py-4">
-          <div className="flex flex-col gap-3">
-            {sessionImportJobs.slice(0, 3).map((job) => {
-              const processedCount =
-                job.completedCount +
-                job.failedCount +
-                job.duplicateCount +
-                job.invalidCount +
-                job.filteredCount;
-              const progressValue =
-                job.totalCount > 0
-                  ? Math.min(100, Math.round((processedCount / job.totalCount) * 100))
-                  : 0;
+          {(() => {
+            const processedCount =
+              visibleImportJob.completedCount +
+              visibleImportJob.failedCount +
+              visibleImportJob.duplicateCount +
+              visibleImportJob.invalidCount +
+              visibleImportJob.filteredCount;
+            const progressValue =
+              visibleImportJob.totalCount > 0
+                ? Math.min(100, Math.round((processedCount / visibleImportJob.totalCount) * 100))
+                : 0;
 
-              return (
-                <div key={job.id} className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {job.status === 'queued'
-                          ? 'Importación en cola'
-                          : job.status === 'processing'
-                            ? 'Importación en progreso'
-                            : job.status === 'completed'
-                              ? 'Importación finalizada'
-                              : 'Importación con errores'}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {job.completedCount} importadas · {job.duplicateCount} duplicadas ·{' '}
-                        {job.invalidCount + job.filteredCount} ignoradas · {job.failedCount}{' '}
-                        fallidas
-                      </p>
-                    </div>
-                    <span className="text-xs font-semibold text-white/72">{progressValue}%</span>
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {visibleImportJob.status === 'queued'
+                        ? 'Importación en cola'
+                        : visibleImportJob.status === 'processing'
+                          ? 'Importación en progreso'
+                          : visibleImportJob.status === 'completed'
+                            ? 'Importación finalizada'
+                            : 'Importación con errores'}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {visibleImportJob.completedCount} importadas ·{' '}
+                      {visibleImportJob.duplicateCount} duplicadas ·{' '}
+                      {visibleImportJob.invalidCount + visibleImportJob.filteredCount} ignoradas ·{' '}
+                      {visibleImportJob.failedCount} fallidas
+                    </p>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/8">
-                    <div
-                      className="h-full rounded-full bg-[linear-gradient(90deg,#e1b27a_0%,#b88a58_100%)] transition-[width] duration-300"
-                      style={{ width: `${progressValue}%` }}
-                    />
-                  </div>
+                  <span className="text-xs font-semibold text-white/72">{progressValue}%</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#e1b27a_0%,#b88a58_100%)] transition-[width] duration-300"
+                    style={{ width: `${progressValue}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : null}
 
@@ -355,6 +382,7 @@ export function SessionsConsole({
                   job,
                   ...currentJobs.filter((currentJob) => currentJob.id !== job.id),
                 ]);
+                setTransientFinishedJobId(null);
                 setDismissedFeedbackMessage(undefined);
               }}
               triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:ml-auto sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
