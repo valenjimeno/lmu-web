@@ -107,7 +107,6 @@ function ImportSessionsFormBody({
   setSessionTypeFilter,
   preferredDriverSummary,
   entries,
-  ignoredFiles,
   handleFileChange,
   handleDriverChange,
   canSubmit,
@@ -118,12 +117,6 @@ function ImportSessionsFormBody({
   setSessionTypeFilter: (value: SessionTypeFilter) => void;
   preferredDriverSummary: string;
   entries: SessionImportEntry[];
-  ignoredFiles: Array<{
-    id: string;
-    sourceFileName: string;
-    reason: 'invalid-format' | 'filtered-session-type';
-    detectedSessionType: string | null;
-  }>;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   handleDriverChange: (entryId: string, value: string) => void;
   canSubmit: boolean;
@@ -206,25 +199,6 @@ function ImportSessionsFormBody({
             La selección se gestiona como lote completo. Si quieres cambiar los ficheros, vuelve a
             abrir el selector y elige el conjunto definitivo.
           </p>
-        </div>
-      ) : null}
-
-      {ignoredFiles.length > 0 ? (
-        <div className="rounded-[1rem] border border-amber-400/20 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100">
-          Hemos ignorado {ignoredFiles.length} fichero{ignoredFiles.length === 1 ? '' : 's'} con
-          formato no válido.
-        </div>
-      ) : null}
-
-      {ignoredFiles.length > 0 ? (
-        <div className="space-y-2 rounded-[1rem] border border-white/10 bg-white/[0.03] p-4">
-          {ignoredFiles.map((file) => (
-            <p key={file.id} className="text-sm text-muted">
-              {file.reason === 'invalid-format'
-                ? `${file.sourceFileName}: formato de importación no válido, no se hará nada con este XML.`
-                : `${file.sourceFileName}: es ${formatSessionType(file.detectedSessionType)} y no entra en el filtro ${formatSessionTypeFilter(sessionTypeFilter)}.`}
-            </p>
-          ))}
         </div>
       ) : null}
 
@@ -413,26 +387,6 @@ export function ImportSessionsForm({
         importedSessionHashSet,
       ),
     [allEntries, importedSessionHashSet, sessionTypeFilter],
-  );
-
-  const ignoredFiles = useMemo(
-    () =>
-      allEntries
-        .filter(
-          (entry) =>
-            entry.matchState === 'invalid' ||
-            !doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
-        )
-        .map((entry) => ({
-          id: entry.id,
-          sourceFileName: entry.sourceFileName,
-          reason:
-            entry.matchState === 'invalid'
-              ? ('invalid-format' as const)
-              : ('filtered-session-type' as const),
-          detectedSessionType: entry.sessionType,
-        })),
-    [allEntries, sessionTypeFilter],
   );
 
   const preferredDriverSummary = useMemo(() => {
@@ -631,7 +585,6 @@ export function ImportSessionsForm({
         setSessionTypeFilter={setSessionTypeFilter}
         preferredDriverSummary={preferredDriverSummary}
         entries={entries}
-        ignoredFiles={ignoredFiles}
         handleFileChange={handleFileChange}
         handleDriverChange={handleDriverChange}
         canSubmit={canSubmit}

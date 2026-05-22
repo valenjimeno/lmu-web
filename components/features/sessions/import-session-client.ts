@@ -2,6 +2,11 @@
 
 export type MatchState = 'idle' | 'matched' | 'needs-selection' | 'invalid';
 
+type DriverSummary = {
+  name: string;
+  hasValidLap: boolean;
+};
+
 export function normalizeDriverName(value: string) {
   return value
     .normalize('NFD')
@@ -11,20 +16,35 @@ export function normalizeDriverName(value: string) {
     .toLocaleLowerCase();
 }
 
-export function extractDriverNames(xmlContent: string) {
-  const names: string[] = [];
+export function extractDrivers(xmlContent: string) {
+  const drivers: DriverSummary[] = [];
   const driverPattern = /<Driver>([\s\S]*?)<\/Driver>/g;
 
   for (const match of xmlContent.matchAll(driverPattern)) {
-    const nameMatch = match[1]?.match(/<Name>([\s\S]*?)<\/Name>/i);
+    const driverBlock = match[1] ?? '';
+    const nameMatch = driverBlock.match(/<Name>([\s\S]*?)<\/Name>/i);
     const driverName = nameMatch?.[1]?.trim();
+    const hasValidLap = /<Lap\b[^>]*>(?!\s*--\.----\s*<\/Lap>)[\s\S]*?<\/Lap>/i.test(driverBlock);
 
     if (driverName) {
-      names.push(driverName);
+      drivers.push({
+        name: driverName,
+        hasValidLap,
+      });
     }
   }
 
-  return names;
+  return drivers;
+}
+
+export function extractDriverNames(xmlContent: string) {
+  return extractDrivers(xmlContent).map((driver) => driver.name);
+}
+
+export function extractDriverNamesWithValidLaps(xmlContent: string) {
+  return extractDrivers(xmlContent)
+    .filter((driver) => driver.hasValidLap)
+    .map((driver) => driver.name);
 }
 
 export function findPreferredDriverName(
