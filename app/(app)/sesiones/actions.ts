@@ -160,6 +160,10 @@ export async function createSessionAction(formData: FormData) {
           redirect(`${returnTo}?error=import_driver_not_found`);
         }
 
+        if (error.message === 'no_valid_laps') {
+          redirect(`${returnTo}?error=import_no_valid_laps`);
+        }
+
         if (error.message === 'duplicate_session') {
           redirect(`${returnTo}?error=import_duplicate_session`);
         }
@@ -195,6 +199,10 @@ export async function createSessionAction(formData: FormData) {
 
       if (error.message === 'driver_not_found') {
         redirect(`${returnTo}?error=import_driver_not_found`);
+      }
+
+      if (error.message === 'no_valid_laps') {
+        redirect(`${returnTo}?error=import_no_valid_laps`);
       }
 
       if (error.message === 'duplicate_session') {

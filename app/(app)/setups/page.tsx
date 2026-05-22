@@ -32,6 +32,8 @@ const errorMessages: Record<string, string> = {
   import_invalid_xml: 'No hemos podido leer el XML. Revisa el fichero e inténtalo de nuevo.',
   import_driver_not_found:
     'No hemos encontrado el piloto seleccionado en el XML. Elige otro nombre del listado.',
+  import_no_valid_laps:
+    'El XML no tiene ninguna vuelta válida para el piloto seleccionado, así que no se puede importar.',
   import_duplicate_session:
     'Este XML ya estaba importado como sesión. No se puede subir la misma sesión más de una vez.',
   import_failed: 'No hemos podido importar la sesión. Inténtalo de nuevo en unos segundos.',

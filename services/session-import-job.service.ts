@@ -70,6 +70,7 @@ const invalidImportErrorCodes = new Set([
   'empty_xml',
   'invalid_xml',
   'driver_not_found',
+  'no_valid_laps',
   'missing_storage_source',
 ]);
 
@@ -78,6 +79,7 @@ const terminalImportErrorCodes = new Set([
   'empty_xml',
   'invalid_xml',
   'driver_not_found',
+  'no_valid_laps',
   'filtered_session_type',
   'missing_storage_source',
 ]);

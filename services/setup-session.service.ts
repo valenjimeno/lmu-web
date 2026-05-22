@@ -229,6 +229,10 @@ function findDriverByPreferredName(drivers: ParsedDriver[], preferredName: strin
   );
 }
 
+function hasAtLeastOneValidLap(driver: ParsedDriver) {
+  return driver.laps.some((lap) => lap.isValidLap && !lap.pitFlag);
+}
+
 function extractTagContent(source: string, tagName: string) {
   const pattern = new RegExp(`<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tagName}>`, 'i');
   const match = source.match(pattern);
@@ -834,6 +838,10 @@ async function importSetupSessionInternal(
 
   if (!selectedDriver) {
     throw new Error('driver_not_found');
+  }
+
+  if (!hasAtLeastOneValidLap(selectedDriver)) {
+    throw new Error('no_valid_laps');
   }
 
   const eventCounts = countDriverEvents(xmlContent, selectedDriver.name);

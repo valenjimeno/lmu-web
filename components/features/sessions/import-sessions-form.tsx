@@ -4,7 +4,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { useMemo, useState } from 'react';
 import {
   computeXmlHash,
-  extractDriverNames,
+  extractDriverNamesWithValidLaps,
   findPreferredDriverName,
   type MatchState,
 } from '@/components/features/sessions/import-session-client';
@@ -305,7 +305,7 @@ async function buildImportEntry(
 ): Promise<SessionImportEntry> {
   const xmlContent = await file.text();
   const xmlHash = await computeXmlHash(xmlContent);
-  const availableDriverNames = extractDriverNames(xmlContent);
+  const availableDriverNames = extractDriverNamesWithValidLaps(xmlContent);
   const preferredDriverName = findPreferredDriverName(availableDriverNames, preferredDriverNames);
 
   let selectedDriverName = '';

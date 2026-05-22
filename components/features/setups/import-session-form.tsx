@@ -4,7 +4,7 @@ import type { ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
 import {
   computeXmlHash,
-  extractDriverNames,
+  extractDriverNamesWithValidLaps,
   findPreferredDriverName,
   type MatchState,
 } from '@/components/features/sessions/import-session-client';
@@ -71,7 +71,7 @@ export function ImportSessionForm({
 
     const nextXmlContent = await selectedFile.text();
     const nextXmlHash = await computeXmlHash(nextXmlContent);
-    const nextDriverNames = extractDriverNames(nextXmlContent);
+    const nextDriverNames = extractDriverNamesWithValidLaps(nextXmlContent);
     const nextSessionType = detectSessionTypeFromXml(nextXmlContent);
     const preferredDriverName = findPreferredDriverName(nextDriverNames, preferredDriverNames);
     const duplicateDetected = importedSessionHashSet.has(nextXmlHash);

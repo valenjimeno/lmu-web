@@ -44,6 +44,17 @@ type SessionsConsoleProps = {
   importJobs: SessionImportJobSummary[];
 };
 
+type SessionImportProgressSummary = {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  totalCount: number;
+  completedCount: number;
+  failedCount: number;
+  duplicateCount: number;
+  invalidCount: number;
+  filteredCount: number;
+};
+
 function formatPositionDelta(value: number | null) {
   if (value === null) {
     return 'No definido';
@@ -62,6 +73,33 @@ function formatPositionDelta(value: number | null) {
 
 function buildCompactLabel(value: string, prefix: string) {
   return `${prefix}: ${value}`;
+}
+
+function aggregateImportJobs(jobs: SessionImportJobSummary[]): SessionImportProgressSummary | null {
+  if (jobs.length === 0) {
+    return null;
+  }
+
+  const hasProcessingJob = jobs.some((job) => job.status === 'processing');
+  const hasQueuedJob = jobs.some((job) => job.status === 'queued');
+  const hasFailedJob = jobs.some((job) => job.status === 'failed');
+
+  return {
+    id: jobs.map((job) => job.id).join(':'),
+    status: hasProcessingJob
+      ? 'processing'
+      : hasQueuedJob
+        ? 'queued'
+        : hasFailedJob
+          ? 'failed'
+          : 'completed',
+    totalCount: jobs.reduce((sum, job) => sum + job.totalCount, 0),
+    completedCount: jobs.reduce((sum, job) => sum + job.completedCount, 0),
+    failedCount: jobs.reduce((sum, job) => sum + job.failedCount, 0),
+    duplicateCount: jobs.reduce((sum, job) => sum + job.duplicateCount, 0),
+    invalidCount: jobs.reduce((sum, job) => sum + job.invalidCount, 0),
+    filteredCount: jobs.reduce((sum, job) => sum + job.filteredCount, 0),
+  };
 }
 
 export function SessionsConsole({
@@ -93,7 +131,7 @@ export function SessionsConsole({
   const [polledSessionImportJobs, setPolledSessionImportJobs] = useState<SessionImportJobSummary[]>(
     [],
   );
-  const [transientFinishedJobId, setTransientFinishedJobId] = useState<string | null>(null);
+  const [transientFinishedJobIds, setTransientFinishedJobIds] = useState<string[]>([]);
   const filterFormKey = useMemo(
     () =>
       JSON.stringify({
@@ -162,15 +200,22 @@ export function SessionsConsole({
     () => sessionImportJobs.filter((job) => job.status === 'queued' || job.status === 'processing'),
     [sessionImportJobs],
   );
-  const latestActiveImportJob = activeImportJobs[0] ?? null;
-  const transientFinishedJob = useMemo(() => {
-    if (!transientFinishedJobId) {
-      return null;
-    }
-
-    return sessionImportJobs.find((job) => job.id === transientFinishedJobId) ?? null;
-  }, [sessionImportJobs, transientFinishedJobId]);
-  const visibleImportJob = latestActiveImportJob ?? transientFinishedJob;
+  const activeImportSummary = useMemo(
+    () => aggregateImportJobs(activeImportJobs),
+    [activeImportJobs],
+  );
+  const transientFinishedJobs = useMemo(
+    () =>
+      transientFinishedJobIds
+        .map((jobId) => sessionImportJobs.find((job) => job.id === jobId) ?? null)
+        .filter((job): job is SessionImportJobSummary => job !== null),
+    [sessionImportJobs, transientFinishedJobIds],
+  );
+  const transientFinishedSummary = useMemo(
+    () => aggregateImportJobs(transientFinishedJobs),
+    [transientFinishedJobs],
+  );
+  const visibleImportJob = activeImportSummary ?? transientFinishedSummary;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentHref = useMemo(() => {
@@ -219,7 +264,7 @@ export function SessionsConsole({
 
         setPolledSessionImportJobs(payload.jobs);
 
-        const finishedJob = payload.jobs.find((job) => {
+        const finishedJobs = payload.jobs.filter((job) => {
           const previousStatus = previousStatuses.get(job.id);
           return (
             previousStatus &&
@@ -228,8 +273,16 @@ export function SessionsConsole({
           );
         });
 
-        if (finishedJob) {
-          setTransientFinishedJobId(finishedJob.id);
+        if (finishedJobs.length > 0) {
+          setTransientFinishedJobIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+
+            for (const job of finishedJobs) {
+              nextIds.add(job.id);
+            }
+
+            return Array.from(nextIds);
+          });
           router.refresh();
         }
       } catch {
@@ -245,21 +298,20 @@ export function SessionsConsole({
   }, [activeImportJobs.length, router, sessionImportJobs]);
 
   useEffect(() => {
-    if (!transientFinishedJobId || latestActiveImportJob) {
+    if (transientFinishedJobIds.length === 0 || activeImportSummary) {
       return undefined;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setTransientFinishedJobId((currentJobId) =>
-        currentJobId === transientFinishedJobId ? null : currentJobId,
-      );
+      const transientIds = new Set(transientFinishedJobIds);
+      setTransientFinishedJobIds([]);
       setPolledSessionImportJobs((currentJobs) =>
-        currentJobs.filter((job) => job.id !== transientFinishedJobId),
+        currentJobs.filter((job) => !transientIds.has(job.id)),
       );
     }, 6000);
 
     return () => window.clearTimeout(timeoutId);
-  }, [latestActiveImportJob, transientFinishedJobId]);
+  }, [activeImportSummary, transientFinishedJobIds]);
 
   const buildSessionsPageHref = useCallback(
     (nextPage: number, nextFilters: SessionConsoleFilters = filters) => {
@@ -382,7 +434,7 @@ export function SessionsConsole({
                   job,
                   ...currentJobs.filter((currentJob) => currentJob.id !== job.id),
                 ]);
-                setTransientFinishedJobId(null);
+                setTransientFinishedJobIds([]);
                 setDismissedFeedbackMessage(undefined);
               }}
               triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:ml-auto sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
