@@ -16,13 +16,14 @@ import {
   formatSessionTypeFilter,
   type SessionTypeFilter,
 } from '@/lib/utils/session-type';
+import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 
 type ImportSessionsFormProps = {
-  action: (formData: FormData) => void | Promise<void>;
   importedSessionHashes: string[];
   preferredDriverNames: string[];
   returnTo?: string;
   submitLabel?: string;
+  onJobCreated?: (job: SessionImportJobSummary) => void;
 };
 
 type SessionImportEntry = {
@@ -43,207 +44,80 @@ const sessionTypeFilterOptions: SessionTypeFilter[] = ['all', 'race', 'qualify',
 const inputClassName =
   'input-surface w-full rounded-[1rem] px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
 
-function buildEntryId(fileName: string, hash: string, index: number) {
-  return `${fileName}:${hash}:${index}`;
-}
-
-function getDefaultSessionName(fileName: string) {
-  return fileName.replace(/\.[^.]+$/, '').trim() || fileName;
-}
-
-function applyDuplicateFlags(
-  entries: SessionImportEntry[],
-  importedSessionHashSet: ReadonlySet<string>,
-): SessionImportEntry[] {
-  const hashCounts = new Map<string, number>();
-
-  for (const entry of entries) {
-    hashCounts.set(entry.xmlHash, (hashCounts.get(entry.xmlHash) ?? 0) + 1);
+function ImportSessionsPendingState({ isSubmitting }: { isSubmitting: boolean }) {
+  if (!isSubmitting) {
+    return null;
   }
-
-  return entries.map((entry) => {
-    const isAlreadyImported = importedSessionHashSet.has(entry.xmlHash);
-    const isRepeatedInSelection = (hashCounts.get(entry.xmlHash) ?? 0) > 1;
-
-    return {
-      ...entry,
-      duplicateReason: isAlreadyImported
-        ? 'already-imported'
-        : isRepeatedInSelection
-          ? 'selected-more-than-once'
-          : null,
-    };
-  });
-}
-
-async function buildImportEntry(
-  file: File,
-  index: number,
-  preferredDriverNames: string[],
-): Promise<SessionImportEntry> {
-  const xmlContent = await file.text();
-  const xmlHash = await computeXmlHash(xmlContent);
-  const availableDriverNames = extractDriverNames(xmlContent);
-  const preferredDriverName = findPreferredDriverName(availableDriverNames, preferredDriverNames);
-
-  let selectedDriverName = '';
-  let matchState: MatchState = 'invalid';
-
-  if (availableDriverNames.length > 0) {
-    if (preferredDriverName) {
-      selectedDriverName = preferredDriverName;
-      matchState = 'matched';
-    } else {
-      matchState = 'needs-selection';
-    }
-  }
-
-  return {
-    id: buildEntryId(file.name, xmlHash, index),
-    sessionName: getDefaultSessionName(file.name),
-    sourceFileName: file.name,
-    xmlContent,
-    xmlHash,
-    availableDriverNames,
-    selectedDriverName,
-    sessionType: detectSessionTypeFromXml(xmlContent),
-    matchState,
-    duplicateReason: null,
-  };
-}
-
-export function ImportSessionsForm({
-  action,
-  importedSessionHashes,
-  preferredDriverNames,
-  returnTo,
-  submitLabel = 'Importar sesiones',
-}: ImportSessionsFormProps) {
-  const [allEntries, setAllEntries] = useState<SessionImportEntry[]>([]);
-  const [sessionTypeFilter, setSessionTypeFilter] = useState<SessionTypeFilter>('all');
-  const importedSessionHashSet = useMemo(
-    () => new Set(importedSessionHashes),
-    [importedSessionHashes],
-  );
-
-  const entries = useMemo(
-    () =>
-      applyDuplicateFlags(
-        allEntries.filter(
-          (entry) =>
-            entry.matchState !== 'invalid' &&
-            doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
-        ),
-        importedSessionHashSet,
-      ),
-    [allEntries, importedSessionHashSet, sessionTypeFilter],
-  );
-
-  const ignoredFiles = useMemo(
-    () =>
-      allEntries
-        .filter(
-          (entry) =>
-            entry.matchState === 'invalid' ||
-            !doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
-        )
-        .map((entry) => ({
-          id: entry.id,
-          sourceFileName: entry.sourceFileName,
-          reason:
-            entry.matchState === 'invalid'
-              ? ('invalid-format' as const)
-              : ('filtered-session-type' as const),
-          detectedSessionType: entry.sessionType,
-        })),
-    [allEntries, sessionTypeFilter],
-  );
-
-  const preferredDriverSummary = useMemo(() => {
-    const normalizedNames = preferredDriverNames.filter(Boolean);
-    return normalizedNames.length > 0
-      ? normalizedNames.join(' · ')
-      : 'No hemos podido resolver tu nombre completo desde el perfil.';
-  }, [preferredDriverNames]);
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(event.target.files ?? []);
-
-    if (selectedFiles.length === 0) {
-      setAllEntries([]);
-      return;
-    }
-
-    const builtEntries = await Promise.all(
-      selectedFiles.map((file, index) => buildImportEntry(file, index, preferredDriverNames)),
-    );
-
-    setAllEntries(builtEntries);
-  }
-
-  function handleSessionNameChange(entryId: string, value: string) {
-    setAllEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        entry.id === entryId
-          ? {
-              ...entry,
-              sessionName: value,
-            }
-          : entry,
-      ),
-    );
-  }
-
-  function handleDriverChange(entryId: string, value: string) {
-    setAllEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        entry.id === entryId
-          ? {
-              ...entry,
-              selectedDriverName: value,
-            }
-          : entry,
-      ),
-    );
-  }
-
-  function handleRemoveEntry(entryId: string) {
-    setAllEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId));
-  }
-
-  const payload = useMemo(
-    () =>
-      JSON.stringify(
-        entries.map((entry) => ({
-          sessionName: entry.sessionName,
-          xmlContent: entry.xmlContent,
-          sourceFileName: entry.sourceFileName,
-          driverName: entry.selectedDriverName,
-        })),
-      ),
-    [entries],
-  );
-
-  const invalidEntriesCount = entries.filter((entry) => entry.matchState === 'invalid').length;
-  const duplicateEntriesCount = entries.filter((entry) => entry.duplicateReason !== null).length;
-
-  const canSubmit =
-    entries.length > 0 &&
-    invalidEntriesCount === 0 &&
-    duplicateEntriesCount === 0 &&
-    entries.every(
-      (entry) =>
-        entry.sessionName.trim().length > 0 &&
-        ((entry.matchState === 'matched' && entry.selectedDriverName.trim().length > 0) ||
-          (entry.matchState === 'needs-selection' && entry.selectedDriverName.trim().length > 0)),
-    );
 
   return (
-    <form action={action} className="space-y-4">
-      <input type="hidden" name="sessionsPayload" value={payload} />
-      <input type="hidden" name="sessionTypeFilter" value={sessionTypeFilter} />
-      <input type="hidden" name="returnTo" value={returnTo ?? '/sesiones'} />
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/72 px-6 backdrop-blur-md">
+      <div className="app-panel-strong w-full max-w-md rounded-[1.75rem] border border-white/10 px-6 py-8 text-center shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(241,196,135,0.22)] bg-[rgba(225,178,122,0.12)]">
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-[rgba(241,196,135,0.25)] border-t-[#f3d2a6]" />
+        </div>
+        <h3 className="mt-5 text-lg font-semibold text-white">Importando sesiones</h3>
+        <p className="mt-2 text-sm leading-6 text-white/72">
+          Estamos procesando los XML seleccionados. Mientras termina, bloqueamos la interacción para
+          evitar importaciones duplicadas.
+        </p>
+      </div>
+    </div>
+  );
+}
 
+function ImportSessionsSubmitButton({
+  canSubmit,
+  submitLabel,
+  isSubmitting,
+}: {
+  canSubmit: boolean;
+  submitLabel: string;
+  isSubmitting: boolean;
+}) {
+  return (
+    <Button type="submit" disabled={!canSubmit || isSubmitting} className="w-full sm:w-auto">
+      {isSubmitting ? 'Encolando importación...' : submitLabel}
+    </Button>
+  );
+}
+
+function ImportSessionsFormBody({
+  sessionTypeFilter,
+  setSessionTypeFilter,
+  preferredDriverSummary,
+  entries,
+  ignoredFiles,
+  handleFileChange,
+  handleRemoveEntry,
+  handleSessionNameChange,
+  handleDriverChange,
+  canSubmit,
+  submitLabel,
+  isSubmitting,
+}: {
+  sessionTypeFilter: SessionTypeFilter;
+  setSessionTypeFilter: (value: SessionTypeFilter) => void;
+  preferredDriverSummary: string;
+  entries: SessionImportEntry[];
+  ignoredFiles: Array<{
+    id: string;
+    sourceFileName: string;
+    reason: 'invalid-format' | 'filtered-session-type';
+    detectedSessionType: string | null;
+  }>;
+  handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  handleRemoveEntry: (entryId: string) => void;
+  handleSessionNameChange: (entryId: string, value: string) => void;
+  handleDriverChange: (entryId: string, value: string) => void;
+  canSubmit: boolean;
+  submitLabel: string;
+  isSubmitting: boolean;
+}) {
+  return (
+    <fieldset
+      className="space-y-4 disabled:pointer-events-none disabled:opacity-75"
+      disabled={isSubmitting}
+    >
       <label className="block space-y-2">
         <span className="text-sm font-medium text-foreground">Tipo de sesión a importar</span>
         <select
@@ -378,9 +252,272 @@ export function ImportSessionsForm({
         ))}
       </div>
 
-      <Button type="submit" disabled={!canSubmit} className="w-full sm:w-auto">
-        {submitLabel}
-      </Button>
+      <ImportSessionsSubmitButton
+        canSubmit={canSubmit}
+        submitLabel={submitLabel}
+        isSubmitting={isSubmitting}
+      />
+    </fieldset>
+  );
+}
+
+function buildEntryId(fileName: string, hash: string, index: number) {
+  return `${fileName}:${hash}:${index}`;
+}
+
+function getDefaultSessionName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, '').trim() || fileName;
+}
+
+function applyDuplicateFlags(
+  entries: SessionImportEntry[],
+  importedSessionHashSet: ReadonlySet<string>,
+): SessionImportEntry[] {
+  const hashCounts = new Map<string, number>();
+
+  for (const entry of entries) {
+    hashCounts.set(entry.xmlHash, (hashCounts.get(entry.xmlHash) ?? 0) + 1);
+  }
+
+  return entries.map((entry) => {
+    const isAlreadyImported = importedSessionHashSet.has(entry.xmlHash);
+    const isRepeatedInSelection = (hashCounts.get(entry.xmlHash) ?? 0) > 1;
+
+    return {
+      ...entry,
+      duplicateReason: isAlreadyImported
+        ? 'already-imported'
+        : isRepeatedInSelection
+          ? 'selected-more-than-once'
+          : null,
+    };
+  });
+}
+
+async function buildImportEntry(
+  file: File,
+  index: number,
+  preferredDriverNames: string[],
+): Promise<SessionImportEntry> {
+  const xmlContent = await file.text();
+  const xmlHash = await computeXmlHash(xmlContent);
+  const availableDriverNames = extractDriverNames(xmlContent);
+  const preferredDriverName = findPreferredDriverName(availableDriverNames, preferredDriverNames);
+
+  let selectedDriverName = '';
+  let matchState: MatchState = 'invalid';
+
+  if (availableDriverNames.length > 0) {
+    if (preferredDriverName) {
+      selectedDriverName = preferredDriverName;
+      matchState = 'matched';
+    } else {
+      matchState = 'needs-selection';
+    }
+  }
+
+  return {
+    id: buildEntryId(file.name, xmlHash, index),
+    sessionName: getDefaultSessionName(file.name),
+    sourceFileName: file.name,
+    xmlContent,
+    xmlHash,
+    availableDriverNames,
+    selectedDriverName,
+    sessionType: detectSessionTypeFromXml(xmlContent),
+    matchState,
+    duplicateReason: null,
+  };
+}
+
+export function ImportSessionsForm({
+  importedSessionHashes,
+  preferredDriverNames,
+  returnTo,
+  submitLabel = 'Importar sesiones',
+  onJobCreated,
+}: ImportSessionsFormProps) {
+  const [allEntries, setAllEntries] = useState<SessionImportEntry[]>([]);
+  const [sessionTypeFilter, setSessionTypeFilter] = useState<SessionTypeFilter>('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const importedSessionHashSet = useMemo(
+    () => new Set(importedSessionHashes),
+    [importedSessionHashes],
+  );
+
+  const entries = useMemo(
+    () =>
+      applyDuplicateFlags(
+        allEntries.filter(
+          (entry) =>
+            entry.matchState !== 'invalid' &&
+            doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
+        ),
+        importedSessionHashSet,
+      ),
+    [allEntries, importedSessionHashSet, sessionTypeFilter],
+  );
+
+  const ignoredFiles = useMemo(
+    () =>
+      allEntries
+        .filter(
+          (entry) =>
+            entry.matchState === 'invalid' ||
+            !doesSessionTypeMatchFilter(entry.sessionType, sessionTypeFilter),
+        )
+        .map((entry) => ({
+          id: entry.id,
+          sourceFileName: entry.sourceFileName,
+          reason:
+            entry.matchState === 'invalid'
+              ? ('invalid-format' as const)
+              : ('filtered-session-type' as const),
+          detectedSessionType: entry.sessionType,
+        })),
+    [allEntries, sessionTypeFilter],
+  );
+
+  const preferredDriverSummary = useMemo(() => {
+    const normalizedNames = preferredDriverNames.filter(Boolean);
+    return normalizedNames.length > 0
+      ? normalizedNames.join(' · ')
+      : 'No hemos podido resolver tu nombre completo desde el perfil.';
+  }, [preferredDriverNames]);
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+
+    if (selectedFiles.length === 0) {
+      setAllEntries([]);
+      return;
+    }
+
+    const builtEntries = await Promise.all(
+      selectedFiles.map((file, index) => buildImportEntry(file, index, preferredDriverNames)),
+    );
+
+    setAllEntries(builtEntries);
+  }
+
+  function handleSessionNameChange(entryId: string, value: string) {
+    setAllEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              sessionName: value,
+            }
+          : entry,
+      ),
+    );
+  }
+
+  function handleDriverChange(entryId: string, value: string) {
+    setAllEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              selectedDriverName: value,
+            }
+          : entry,
+      ),
+    );
+  }
+
+  function handleRemoveEntry(entryId: string) {
+    setAllEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId));
+  }
+
+  const invalidEntriesCount = entries.filter((entry) => entry.matchState === 'invalid').length;
+  const duplicateEntriesCount = entries.filter((entry) => entry.duplicateReason !== null).length;
+
+  const canSubmit =
+    entries.length > 0 &&
+    invalidEntriesCount === 0 &&
+    duplicateEntriesCount === 0 &&
+    entries.every(
+      (entry) =>
+        entry.sessionName.trim().length > 0 &&
+        ((entry.matchState === 'matched' && entry.selectedDriverName.trim().length > 0) ||
+          (entry.matchState === 'needs-selection' && entry.selectedDriverName.trim().length > 0)),
+    );
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSubmit || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch('/api/session-import-jobs', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionTypeFilter,
+          sessions: entries.map((entry) => ({
+            sessionName: entry.sessionName,
+            xmlContent: entry.xmlContent,
+            sourceFileName: entry.sourceFileName,
+            driverName: entry.selectedDriverName,
+          })),
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        job?: SessionImportJobSummary;
+      };
+
+      if (!response.ok || !payload.job) {
+        throw new Error(payload.error ?? 'import_job_failed');
+      }
+
+      onJobCreated?.(payload.job);
+      setAllEntries([]);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'import_job_failed';
+      setSubmitError(
+        code === 'empty_import_job'
+          ? 'No hay XML válidos para encolar con el filtro actual.'
+          : 'No hemos podido iniciar la importación en segundo plano. Inténtalo de nuevo.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="relative space-y-4">
+      <ImportSessionsPendingState isSubmitting={isSubmitting} />
+      <input type="hidden" name="returnTo" value={returnTo ?? '/sesiones'} />
+      {submitError ? (
+        <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
+          {submitError}
+        </div>
+      ) : null}
+      <ImportSessionsFormBody
+        sessionTypeFilter={sessionTypeFilter}
+        setSessionTypeFilter={setSessionTypeFilter}
+        preferredDriverSummary={preferredDriverSummary}
+        entries={entries}
+        ignoredFiles={ignoredFiles}
+        handleFileChange={handleFileChange}
+        handleRemoveEntry={handleRemoveEntry}
+        handleSessionNameChange={handleSessionNameChange}
+        handleDriverChange={handleDriverChange}
+        canSubmit={canSubmit}
+        submitLabel={submitLabel}
+        isSubmitting={isSubmitting}
+      />
     </form>
   );
 }

@@ -1,22 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createSessionAction } from '@/app/(app)/sesiones/actions';
 import { ImportSessionsForm } from '@/components/features/sessions/import-sessions-form';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
+import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 
 type CreateSessionModalProps = {
   importedSessionHashes: string[];
   preferredDriverName?: string;
   triggerClassName?: string;
+  onJobCreated?: (job: SessionImportJobSummary) => void;
 };
 
 export function CreateSessionModal({
   importedSessionHashes,
   preferredDriverName,
   triggerClassName,
+  onJobCreated,
 }: CreateSessionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -82,11 +84,14 @@ export function CreateSessionModal({
 
             <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
               <ImportSessionsForm
-                action={createSessionAction}
                 importedSessionHashes={importedSessionHashes}
                 preferredDriverNames={preferredDriverName ? [preferredDriverName] : []}
                 returnTo={routes.sessions}
                 submitLabel="Importar sesiones"
+                onJobCreated={(job) => {
+                  onJobCreated?.(job);
+                  setIsOpen(false);
+                }}
               />
             </section>
           </div>

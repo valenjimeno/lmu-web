@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
+import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 import type { SessionSummary } from '@/services/session.service';
 
 type Option = {
@@ -40,6 +41,7 @@ type SessionsConsoleProps = {
   feedbackTone?: string;
   importedSessionHashes: string[];
   preferredDriverName?: string;
+  importJobs: SessionImportJobSummary[];
 };
 
 function formatPositionDelta(value: number | null) {
@@ -76,6 +78,7 @@ export function SessionsConsole({
   feedbackTone,
   importedSessionHashes,
   preferredDriverName,
+  importJobs,
 }: SessionsConsoleProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -86,6 +89,9 @@ export function SessionsConsole({
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [dismissedFeedbackMessage, setDismissedFeedbackMessage] = useState<string | undefined>(
     undefined,
+  );
+  const [polledSessionImportJobs, setPolledSessionImportJobs] = useState<SessionImportJobSummary[]>(
+    [],
   );
   const filterFormKey = useMemo(
     () =>
@@ -136,6 +142,25 @@ export function SessionsConsole({
   );
   const visibleFeedbackMessage =
     feedbackMessage && dismissedFeedbackMessage !== feedbackMessage ? feedbackMessage : undefined;
+  const sessionImportJobs = useMemo(() => {
+    const jobsById = new Map<string, SessionImportJobSummary>();
+
+    for (const job of importJobs) {
+      jobsById.set(job.id, job);
+    }
+
+    for (const job of polledSessionImportJobs) {
+      jobsById.set(job.id, job);
+    }
+
+    return Array.from(jobsById.values()).sort(
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+    );
+  }, [importJobs, polledSessionImportJobs]);
+  const activeImportJobs = useMemo(
+    () => sessionImportJobs.filter((job) => job.status === 'queued' || job.status === 'processing'),
+    [sessionImportJobs],
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentHref = useMemo(() => {
@@ -154,6 +179,59 @@ export function SessionsConsole({
 
     return () => window.clearTimeout(timeoutId);
   }, [feedbackMessage]);
+
+  useEffect(() => {
+    if (activeImportJobs.length === 0) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+    const previousStatuses = new Map(sessionImportJobs.map((job) => [job.id, job.status]));
+
+    async function pollJobs() {
+      try {
+        const response = await fetch('/api/session-import-jobs', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          jobs?: SessionImportJobSummary[];
+        };
+
+        if (isCancelled || !payload.jobs) {
+          return;
+        }
+
+        setPolledSessionImportJobs(payload.jobs);
+
+        const finishedJob = payload.jobs.find((job) => {
+          const previousStatus = previousStatuses.get(job.id);
+          return (
+            previousStatus &&
+            (previousStatus === 'queued' || previousStatus === 'processing') &&
+            (job.status === 'completed' || job.status === 'failed')
+          );
+        });
+
+        if (finishedJob) {
+          router.refresh();
+        }
+      } catch {
+        // Ignore transient polling errors and retry on next interval.
+      }
+    }
+
+    const intervalId = window.setInterval(pollJobs, 3000);
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeImportJobs.length, router, sessionImportJobs]);
 
   const buildSessionsPageHref = useCallback(
     (nextPage: number, nextFilters: SessionConsoleFilters = filters) => {
@@ -213,6 +291,55 @@ export function SessionsConsole({
         </div>
       ) : null}
 
+      {sessionImportJobs.length > 0 ? (
+        <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-4 py-4">
+          <div className="flex flex-col gap-3">
+            {sessionImportJobs.slice(0, 3).map((job) => {
+              const processedCount =
+                job.completedCount +
+                job.failedCount +
+                job.duplicateCount +
+                job.invalidCount +
+                job.filteredCount;
+              const progressValue =
+                job.totalCount > 0
+                  ? Math.min(100, Math.round((processedCount / job.totalCount) * 100))
+                  : 0;
+
+              return (
+                <div key={job.id} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {job.status === 'queued'
+                          ? 'Importación en cola'
+                          : job.status === 'processing'
+                            ? 'Importación en progreso'
+                            : job.status === 'completed'
+                              ? 'Importación finalizada'
+                              : 'Importación con errores'}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {job.completedCount} importadas · {job.duplicateCount} duplicadas ·{' '}
+                        {job.invalidCount + job.filteredCount} ignoradas · {job.failedCount}{' '}
+                        fallidas
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold text-white/72">{progressValue}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,#e1b27a_0%,#b88a58_100%)] transition-[width] duration-300"
+                      style={{ width: `${progressValue}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <section className="panel-dark overflow-hidden rounded-[1.25rem]">
           <div className="hairline-divider flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -223,6 +350,13 @@ export function SessionsConsole({
             <CreateSessionModal
               importedSessionHashes={importedSessionHashes}
               preferredDriverName={preferredDriverName}
+              onJobCreated={(job) => {
+                setPolledSessionImportJobs((currentJobs) => [
+                  job,
+                  ...currentJobs.filter((currentJob) => currentJob.id !== job.id),
+                ]);
+                setDismissedFeedbackMessage(undefined);
+              }}
               triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:ml-auto sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
             />
           </div>

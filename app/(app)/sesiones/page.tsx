@@ -3,6 +3,7 @@ import { SessionsConsole } from '@/components/features/sessions/sessions-console
 import { routes } from '@/lib/constants/routes';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { getProfilePageData } from '@/services/profile.service';
+import { getRecentSessionImportJobs } from '@/services/session-import-job.service';
 import { getImportedSessionHashes, getSessionPageData } from '@/services/session.service';
 
 type SessionsPageProps = {
@@ -37,9 +38,10 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
     redirect(routes.login);
   }
 
-  const [profilePageData, importedSessionHashes] = await Promise.all([
+  const [profilePageData, importedSessionHashes, importJobs] = await Promise.all([
     getProfilePageData(user.id),
     getImportedSessionHashes(user.id),
+    getRecentSessionImportJobs(user.id),
   ]);
   const splitProfileFullName =
     profilePageData.profile?.firstName?.trim() && profilePageData.profile?.lastName?.trim()
@@ -112,6 +114,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
       feedbackTone={feedbackTone}
       importedSessionHashes={importedSessionHashes}
       preferredDriverName={preferredDriverName}
+      importJobs={importJobs}
     />
   );
 }

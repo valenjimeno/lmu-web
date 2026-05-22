@@ -157,6 +157,129 @@ export type Database = {
           },
         ];
       };
+      session_import_job_items: {
+        Row: {
+          created_at: string;
+          detected_session_type: string | null;
+          driver_name: string;
+          error_code: string | null;
+          error_message: string | null;
+          id: string;
+          imported_session_id: string | null;
+          job_id: string;
+          owner_user_id: string;
+          processed_at: string | null;
+          session_name: string;
+          source_file_hash: string;
+          source_file_name: string | null;
+          status: string;
+          xml_content: string;
+        };
+        Insert: {
+          created_at?: string;
+          detected_session_type?: string | null;
+          driver_name: string;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          imported_session_id?: string | null;
+          job_id: string;
+          owner_user_id: string;
+          processed_at?: string | null;
+          session_name: string;
+          source_file_hash: string;
+          source_file_name?: string | null;
+          status?: string;
+          xml_content: string;
+        };
+        Update: {
+          created_at?: string;
+          detected_session_type?: string | null;
+          driver_name?: string;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          imported_session_id?: string | null;
+          job_id?: string;
+          owner_user_id?: string;
+          processed_at?: string | null;
+          session_name?: string;
+          source_file_hash?: string;
+          source_file_name?: string | null;
+          status?: string;
+          xml_content?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'session_import_job_items_imported_session_id_fkey';
+            columns: ['imported_session_id'];
+            isOneToOne: false;
+            referencedRelation: 'setup_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'session_import_job_items_job_id_fkey';
+            columns: ['job_id'];
+            isOneToOne: false;
+            referencedRelation: 'session_import_jobs';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      session_import_jobs: {
+        Row: {
+          completed_at: string | null;
+          completed_count: number;
+          created_at: string;
+          duplicate_count: number;
+          failed_count: number;
+          filtered_count: number;
+          id: string;
+          invalid_count: number;
+          owner_user_id: string;
+          processing_count: number;
+          queued_count: number;
+          session_type_filter: string;
+          started_at: string | null;
+          status: string;
+          total_count: number;
+        };
+        Insert: {
+          completed_at?: string | null;
+          completed_count?: number;
+          created_at?: string;
+          duplicate_count?: number;
+          failed_count?: number;
+          filtered_count?: number;
+          id?: string;
+          invalid_count?: number;
+          owner_user_id: string;
+          processing_count?: number;
+          queued_count?: number;
+          session_type_filter?: string;
+          started_at?: string | null;
+          status?: string;
+          total_count?: number;
+        };
+        Update: {
+          completed_at?: string | null;
+          completed_count?: number;
+          created_at?: string;
+          duplicate_count?: number;
+          failed_count?: number;
+          filtered_count?: number;
+          id?: string;
+          invalid_count?: number;
+          owner_user_id?: string;
+          processing_count?: number;
+          queued_count?: number;
+          session_type_filter?: string;
+          started_at?: string | null;
+          status?: string;
+          total_count?: number;
+        };
+        Relationships: [];
+      };
       setup_favorites: {
         Row: {
           created_at: string;
