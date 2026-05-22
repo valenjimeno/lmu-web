@@ -2,6 +2,12 @@
 
 import type { ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
+import {
+  computeXmlHash,
+  extractDriverNames,
+  findPreferredDriverName,
+  type MatchState,
+} from '@/components/features/sessions/import-session-client';
 import { Button } from '@/components/ui/button';
 import { detectSessionTypeFromXml, formatSessionType } from '@/lib/utils/session-type';
 
@@ -16,78 +22,8 @@ type ImportSessionFormProps = {
   submitLabel?: string;
 };
 
-type MatchState = 'idle' | 'matched' | 'needs-selection' | 'invalid';
-
 const inputClassName =
   'input-surface w-full rounded-[1rem] px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
-
-function normalizeDriverName(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLocaleLowerCase();
-}
-
-function extractDriverNames(xmlContent: string) {
-  const names: string[] = [];
-  const driverPattern = /<Driver>([\s\S]*?)<\/Driver>/g;
-
-  for (const match of xmlContent.matchAll(driverPattern)) {
-    const nameMatch = match[1]?.match(/<Name>([\s\S]*?)<\/Name>/i);
-    const driverName = nameMatch?.[1]?.trim();
-
-    if (driverName) {
-      names.push(driverName);
-    }
-  }
-
-  return names;
-}
-
-function findPreferredDriverName(availableDriverNames: string[], preferredDriverNames: string[]) {
-  for (const preferredName of preferredDriverNames) {
-    const normalizedPreferredName = normalizeDriverName(preferredName);
-    const matchedDriverName = availableDriverNames.find(
-      (driverName) => normalizeDriverName(driverName) === normalizedPreferredName,
-    );
-
-    if (matchedDriverName) {
-      return matchedDriverName;
-    }
-  }
-
-  for (const preferredName of preferredDriverNames) {
-    const normalizedPreferredName = normalizeDriverName(preferredName);
-    const preferredTokens = normalizedPreferredName.split(' ').filter(Boolean);
-
-    if (preferredTokens.length < 2) {
-      continue;
-    }
-
-    const matchedDriverName = availableDriverNames.find((driverName) => {
-      const normalizedDriverName = normalizeDriverName(driverName);
-
-      return preferredTokens.every((token) => normalizedDriverName.includes(token));
-    });
-
-    if (matchedDriverName) {
-      return matchedDriverName;
-    }
-  }
-
-  return '';
-}
-
-async function computeXmlHash(xmlContent: string) {
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(xmlContent);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 export function ImportSessionForm({
   action,
@@ -107,6 +43,10 @@ export function ImportSessionForm({
   const [sessionType, setSessionType] = useState<string | null>(null);
   const [matchState, setMatchState] = useState<MatchState>('idle');
   const [isDuplicateSession, setIsDuplicateSession] = useState(false);
+  const importedSessionHashSet = useMemo(
+    () => new Set(importedSessionHashes),
+    [importedSessionHashes],
+  );
 
   const preferredDriverSummary = useMemo(() => {
     const normalizedNames = preferredDriverNames.filter(Boolean);
@@ -134,7 +74,7 @@ export function ImportSessionForm({
     const nextDriverNames = extractDriverNames(nextXmlContent);
     const nextSessionType = detectSessionTypeFromXml(nextXmlContent);
     const preferredDriverName = findPreferredDriverName(nextDriverNames, preferredDriverNames);
-    const duplicateDetected = importedSessionHashes.includes(nextXmlHash);
+    const duplicateDetected = importedSessionHashSet.has(nextXmlHash);
 
     setSourceFileName(selectedFile.name);
     setXmlContent(nextXmlContent);

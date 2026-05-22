@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
-import { detectSessionTypeFromXml } from '@/lib/utils/session-type';
+import {
+  detectSessionTypeFromXml,
+  doesSessionTypeMatchFilter,
+  type SessionTypeFilter,
+} from '@/lib/utils/session-type';
 import { deriveSessionMetrics } from '@/services/session-metrics';
 import type { Database } from '@/types/database.types';
 
@@ -82,6 +86,23 @@ type ImportSetupSessionInput = {
   driverName: string;
   sessionName?: string | null;
   sourceFileName?: string | null;
+};
+
+type ImportSetupSessionsBatchInput = {
+  ownerUserId: string;
+  setupId?: string | null;
+  sessionTypeFilter?: SessionTypeFilter;
+  sessions: Array<{
+    xmlContent: string;
+    driverName: string;
+    sessionName?: string | null;
+    sourceFileName?: string | null;
+  }>;
+};
+
+type ImportSetupSessionOptions = {
+  skipDuplicateCheck?: boolean;
+  supabase?: Awaited<ReturnType<typeof createClient>>;
 };
 
 type DeleteSetupSessionInput = {
@@ -767,7 +788,40 @@ function getFallbackSessionName(sourceFileName: string | null | undefined) {
   return normalizedFileName.replace(/\.[^.]+$/, '').trim() || normalizedFileName;
 }
 
-export async function importSetupSession(input: ImportSetupSessionInput) {
+function computeSourceFileHash(xmlContent: string) {
+  return createHash('sha256').update(xmlContent).digest('hex');
+}
+
+async function findExistingSessionHashes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerUserId: string,
+  sourceFileHashes: string[],
+) {
+  if (sourceFileHashes.length === 0) {
+    return new Set<string>();
+  }
+
+  const duplicateSessionResult = await supabase
+    .from('setup_sessions')
+    .select('source_file_hash')
+    .eq('owner_user_id', ownerUserId)
+    .in('source_file_hash', sourceFileHashes);
+
+  if (duplicateSessionResult.error) {
+    throw duplicateSessionResult.error;
+  }
+
+  return new Set(
+    (duplicateSessionResult.data ?? [])
+      .map((session) => session.source_file_hash)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0),
+  );
+}
+
+async function importSetupSessionInternal(
+  input: ImportSetupSessionInput,
+  options: ImportSetupSessionOptions = {},
+) {
   const xmlContent = input.xmlContent.trim();
 
   if (!xmlContent) {
@@ -782,24 +836,19 @@ export async function importSetupSession(input: ImportSetupSessionInput) {
   }
 
   const eventCounts = countDriverEvents(xmlContent, selectedDriver.name);
-  const sourceFileHash = createHash('sha256').update(xmlContent).digest('hex');
+  const sourceFileHash = computeSourceFileHash(xmlContent);
   const normalizedSessionName =
     normalizeSessionName(input.sessionName) ?? getFallbackSessionName(input.sourceFileName);
-  const supabase = await createClient();
-  const duplicateSessionResult = await supabase
-    .from('setup_sessions')
-    .select('id')
-    .eq('owner_user_id', input.ownerUserId)
-    .eq('source_file_hash', sourceFileHash)
-    .limit(1)
-    .maybeSingle();
+  const supabase = options.supabase ?? (await createClient());
 
-  if (duplicateSessionResult.error) {
-    throw duplicateSessionResult.error;
-  }
+  if (!options.skipDuplicateCheck) {
+    const existingHashes = await findExistingSessionHashes(supabase, input.ownerUserId, [
+      sourceFileHash,
+    ]);
 
-  if (duplicateSessionResult.data?.id) {
-    throw new Error('duplicate_session');
+    if (existingHashes.has(sourceFileHash)) {
+      throw new Error('duplicate_session');
+    }
   }
 
   const baseRawPayload =
@@ -994,6 +1043,83 @@ export async function importSetupSession(input: ImportSetupSessionInput) {
     sessionName: normalizedSessionName,
     driverName: selectedDriver.name,
     availableDriverNames: parsedXml.driverNames,
+  };
+}
+
+export async function importSetupSession(input: ImportSetupSessionInput) {
+  return importSetupSessionInternal(input);
+}
+
+export async function importSetupSessionsBatch(input: ImportSetupSessionsBatchInput) {
+  const preparedSessions = input.sessions.map((session) => ({
+    ...session,
+    xmlContent: session.xmlContent.trim(),
+  }));
+  const sessionTypeFilter = input.sessionTypeFilter ?? 'all';
+
+  const filteredSessions = preparedSessions.filter((session) =>
+    doesSessionTypeMatchFilter(detectSessionTypeFromXml(session.xmlContent), sessionTypeFilter),
+  );
+
+  if (preparedSessions.length === 0 || preparedSessions.some((session) => !session.xmlContent)) {
+    throw new Error('empty_xml');
+  }
+
+  if (filteredSessions.length === 0) {
+    return {
+      importedCount: 0,
+      sessions: [],
+    };
+  }
+
+  const sourceFileHashes = filteredSessions.map((session) =>
+    computeSourceFileHash(session.xmlContent),
+  );
+  const uniqueSourceFileHashes = new Set<string>();
+
+  for (const sourceFileHash of sourceFileHashes) {
+    if (uniqueSourceFileHashes.has(sourceFileHash)) {
+      throw new Error('duplicate_session');
+    }
+
+    uniqueSourceFileHashes.add(sourceFileHash);
+  }
+
+  const supabase = await createClient();
+  const existingHashes = await findExistingSessionHashes(
+    supabase,
+    input.ownerUserId,
+    Array.from(uniqueSourceFileHashes),
+  );
+
+  if (existingHashes.size > 0) {
+    throw new Error('duplicate_session');
+  }
+
+  const importedSessions = [];
+
+  for (const session of filteredSessions) {
+    importedSessions.push(
+      await importSetupSessionInternal(
+        {
+          ownerUserId: input.ownerUserId,
+          setupId: input.setupId,
+          xmlContent: session.xmlContent,
+          driverName: session.driverName,
+          sessionName: session.sessionName,
+          sourceFileName: session.sourceFileName,
+        },
+        {
+          skipDuplicateCheck: true,
+          supabase,
+        },
+      ),
+    );
+  }
+
+  return {
+    importedCount: importedSessions.length,
+    sessions: importedSessions,
   };
 }
 

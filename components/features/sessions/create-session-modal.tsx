@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createSessionAction } from '@/app/(app)/sesiones/actions';
-import { ImportSessionForm } from '@/components/features/setups/import-session-form';
+import { ImportSessionsForm } from '@/components/features/sessions/import-sessions-form';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
@@ -71,22 +71,22 @@ export function CreateSessionModal({
             <div className="pr-12">
               <p className="section-kicker font-semibold">Nueva sesión</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-                Importar sesión XML
+                Importar sesiones XML
               </h2>
               <p className="mt-2 text-sm leading-7 text-muted">
-                Sube un XML de resultados y guarda la sesión con su propio nombre. Si no encontramos
-                tu piloto automáticamente, podrás elegirlo antes de importar.
+                Selecciona varios XML de resultados en una sola vez y guarda cada sesión con su
+                propio nombre. Si no encontramos tu piloto automáticamente, podrás elegirlo antes de
+                importar.
               </p>
             </div>
 
             <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
-              <ImportSessionForm
+              <ImportSessionsForm
                 action={createSessionAction}
                 importedSessionHashes={importedSessionHashes}
                 preferredDriverNames={preferredDriverName ? [preferredDriverName] : []}
                 returnTo={routes.sessions}
-                requireSessionName
-                submitLabel="Crear sesión"
+                submitLabel="Importar sesiones"
               />
             </section>
           </div>

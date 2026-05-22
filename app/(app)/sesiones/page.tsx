@@ -75,8 +75,14 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
     pageSize: SESSIONS_PAGE_SIZE,
   });
 
+  const importedCount = Math.max(
+    0,
+    Number.parseInt(resolvedSearchParams.imported?.trim() ?? '0', 10) || 0,
+  );
   const feedbackMessage = resolvedSearchParams.imported
-    ? 'Sesión importada correctamente.'
+    ? importedCount === 1
+      ? 'Sesión importada correctamente.'
+      : `${importedCount} sesiones importadas correctamente.`
     : resolvedSearchParams.deleted
       ? 'Sesión eliminada correctamente.'
       : resolvedSearchParams.error
