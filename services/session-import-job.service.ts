@@ -53,6 +53,23 @@ const sessionImportJobSelect =
 
 const invalidImportErrorCodes = new Set(['empty_xml', 'invalid_xml', 'driver_not_found']);
 
+export function isMissingSessionImportJobsTableError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+  };
+
+  return (
+    candidate.code === 'PGRST205' &&
+    typeof candidate.message === 'string' &&
+    candidate.message.includes('session_import_jobs')
+  );
+}
+
 function computeSourceFileHash(xmlContent: string) {
   return createHash('sha256').update(xmlContent).digest('hex');
 }
@@ -411,6 +428,10 @@ export async function getRecentSessionImportJobs(ownerUserId: string, limit = 6)
     .limit(limit);
 
   if (result.error) {
+    if (isMissingSessionImportJobsTableError(result.error)) {
+      return [];
+    }
+
     throw result.error;
   }
 

@@ -5,7 +5,9 @@ import type { SessionTypeFilter } from '@/lib/utils/session-type';
 import {
   createSessionImportJob,
   getRecentSessionImportJobs,
+  isMissingSessionImportJobsTableError,
 } from '@/services/session-import-job.service';
+import { importSetupSessionsBatch } from '@/services/setup-session.service';
 
 function resolveSessionTypeFilter(value: unknown): SessionTypeFilter {
   const normalizedValue = String(value ?? 'all')
@@ -88,6 +90,53 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ job }, { status: 202 });
   } catch (error) {
+    if (isMissingSessionImportJobsTableError(error)) {
+      try {
+        const sessionTypeFilter = resolveSessionTypeFilter(payload.sessionTypeFilter);
+        const normalizedSessions = sessions.map((session) => ({
+          sessionName: String(session.sessionName ?? '').trim(),
+          xmlContent: String(session.xmlContent ?? '').trim(),
+          sourceFileName: session.sourceFileName ? String(session.sourceFileName).trim() : null,
+          driverName: String(session.driverName ?? '').trim(),
+        }));
+        const result = await importSetupSessionsBatch({
+          ownerUserId: user.id,
+          sessionTypeFilter,
+          sessions: normalizedSessions.filter(
+            (session) => session.sessionName && session.xmlContent && session.driverName,
+          ),
+        });
+
+        const now = new Date().toISOString();
+        return NextResponse.json(
+          {
+            job: {
+              id: `fallback-${now}`,
+              status: 'completed',
+              sessionTypeFilter,
+              totalCount: normalizedSessions.length,
+              queuedCount: 0,
+              processingCount: 0,
+              completedCount: result.importedCount,
+              failedCount: 0,
+              duplicateCount: 0,
+              invalidCount: 0,
+              filteredCount: Math.max(normalizedSessions.length - result.importedCount, 0),
+              createdAt: now,
+              startedAt: now,
+              completedAt: now,
+            },
+            fallbackMode: 'sync',
+          },
+          { status: 200 },
+        );
+      } catch (fallbackError) {
+        const fallbackMessage =
+          fallbackError instanceof Error ? fallbackError.message : 'import_job_fallback_failed';
+        return NextResponse.json({ error: fallbackMessage }, { status: 500 });
+      }
+    }
+
     const message = error instanceof Error ? error.message : 'import_job_failed';
     const status = message === 'empty_import_job' ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
