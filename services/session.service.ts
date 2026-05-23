@@ -261,11 +261,9 @@ function resolveSessionCatalogFilters(
   cars: Awaited<ReturnType<typeof getSetupCatalog>>['cars'],
   filters: Pick<SessionFilters, 'carClassId' | 'carId'>,
 ) {
-  const defaultCarClassId =
-    carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
   const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
     ? filters.carClassId
-    : defaultCarClassId;
+    : undefined;
   const carsForSelectedClass = selectedCarClassId
     ? cars.filter((car) => car.car_class_id === selectedCarClassId)
     : cars;
@@ -274,7 +272,7 @@ function resolveSessionCatalogFilters(
     filters.carId && carsForSelectedClassIds.has(filters.carId) ? filters.carId : undefined;
 
   return {
-    defaultCarClassId,
+    defaultCarClassId: undefined,
     selectedCarClassId,
     carsForSelectedClass,
     selectedCarId,
@@ -611,7 +609,7 @@ export async function getSessionPageData(
     'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops';
   let linkedSessionsCountQuery = supabase
     .from('setup_sessions')
-    .select('id', { count: 'planned', head: true })
+    .select('id', { count: 'exact', head: true })
     .eq('owner_user_id', userId)
     .eq('source_session_setting', selectedSourceSessionSettingNormalized);
   let linkedSessionsDataQuery = supabase
@@ -635,7 +633,7 @@ export async function getSessionPageData(
 
   let standaloneSessionsCountQuery = supabase
     .from('setup_sessions')
-    .select('id', { count: 'planned', head: true })
+    .select('id', { count: 'exact', head: true })
     .eq('owner_user_id', userId)
     .eq('source_session_setting', selectedSourceSessionSettingNormalized)
     .is('setup_id', null);
