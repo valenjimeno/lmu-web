@@ -341,7 +341,7 @@ function resolveSessionCatalogFilters(
     carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
   const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
     ? filters.carClassId
-    : defaultCarClassId;
+    : undefined;
   const carsForSelectedClass = selectedCarClassId
     ? cars.filter((car) => car.car_class_id === selectedCarClassId)
     : cars;
