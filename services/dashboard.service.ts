@@ -17,13 +17,25 @@ type SetupSessionRow = Pick<
   | 'car_type'
   | 'best_lap_seconds'
   | 'average_lap_ms'
+  | 'optimal_lap_ms'
   | 'lap_consistency_ms'
+  | 'best_three_lap_average_ms'
+  | 'last_three_lap_average_ms'
+  | 'pace_fade_ms'
   | 'finish_pos'
   | 'grid_pos'
   | 'valid_lap_rate'
   | 'incidents_count'
   | 'penalties_count'
   | 'track_limits_count'
+  | 'average_fuel_used_per_lap'
+  | 'tire_drop_front_per_lap'
+  | 'tire_drop_rear_per_lap'
+>;
+
+type SessionLapRow = Pick<
+  Database['public']['Tables']['setup_session_laps']['Row'],
+  'session_id' | 'lap_number' | 'lap_time_seconds' | 'pit_flag' | 'is_valid_lap'
 >;
 
 type SetupLinkRow = Pick<
@@ -50,6 +62,8 @@ export type DashboardTrendMetric =
   | 'incidentsCount';
 
 export type DashboardTrendRange = '10' | '30' | 'all';
+
+export type DashboardMode = 'global' | 'contextual' | 'compare';
 
 export type DashboardKpi = {
   label: string;
@@ -104,6 +118,38 @@ export type DashboardInsight = {
   body: string;
 };
 
+export type DashboardCarFitWinner = {
+  carName: string;
+  primaryValue: number | null;
+  format: DashboardKpi['format'];
+  gapToNext: number | null;
+  confidence: 'low' | 'medium' | 'high';
+  supportingLabel: string;
+};
+
+export type DashboardCarFitRankingItem = {
+  carName: string;
+  sessions: number;
+  confidence: 'low' | 'medium' | 'high';
+  bestLapMs: number | null;
+  bestFiveLapAverageMs: number | null;
+  representativeBestLapMs: number | null;
+  representativeBestFiveLapAverageMs: number | null;
+  lapConsistencyMs: number | null;
+  paceFadeMs: number | null;
+  averagePositionGain: number | null;
+  averageIncidents: number | null;
+  fitScore: number;
+};
+
+export type DashboardContextAction = {
+  id: string;
+  tone: 'positive' | 'warning' | 'neutral';
+  label: 'Usar' | 'Vigilar' | 'Trabajar';
+  title: string;
+  body: string;
+};
+
 export type DriverOverviewData = {
   filters: DashboardFilters;
   resolvedFilters: Required<Pick<DashboardFilters, 'sourceSessionSetting'>> &
@@ -121,6 +167,15 @@ export type DriverOverviewData = {
     totalSessions: number;
     dateRangeLabel: string;
   };
+  contextSummary: {
+    headline: string;
+    subheadline: string;
+    activeClassName: string | null;
+    activeTrackName: string | null;
+    activeCarName: string | null;
+    comparedCarsCount: number;
+    comparedTracksCount: number;
+  };
   pilotSummary: {
     totalSessions: number;
     averagePositionGain: number | null;
@@ -137,6 +192,34 @@ export type DriverOverviewData = {
   };
   rankingThreshold: number;
   kpis: DashboardKpi[];
+  contextDiagnostics: {
+    pace: {
+      bestLapMs: number | null;
+      optimalLapMs: number | null;
+      gapToOptimalMs: number | null;
+      bestThreeLapAverageMs: number | null;
+    };
+    stint: {
+      bestFiveLapAverageMs: number | null;
+      lastThreeLapAverageMs: number | null;
+      paceFadeMs: number | null;
+      averageFuelUsedPerLap: number | null;
+      tireDropFrontPerLap: number | null;
+      tireDropRearPerLap: number | null;
+    };
+    execution: {
+      averageFinishPosition: number | null;
+      averagePositionGain: number | null;
+      winsRate: number | null;
+      podiumsRate: number | null;
+    };
+    cleanliness: {
+      validLapRate: number | null;
+      cleanSessionRate: number | null;
+      incidentsPerSession: number | null;
+      penaltiesPerSession: number | null;
+    };
+  };
   cleanliness: {
     incidentsPerSession: number | null;
     penaltiesPerSession: number | null;
@@ -152,6 +235,21 @@ export type DriverOverviewData = {
   topTracks: DashboardRankingItem[];
   weakTracks: DashboardRankingItem[];
   topCars: DashboardRankingItem[];
+  carFit: {
+    active: boolean;
+    trackLabel: string | null;
+    classLabel: string | null;
+    comparedCarsCount: number;
+    winners: {
+      oneLap: DashboardCarFitWinner | null;
+      fiveLap: DashboardCarFitWinner | null;
+      consistency: DashboardCarFitWinner | null;
+      race: DashboardCarFitWinner | null;
+      balanced: DashboardCarFitWinner | null;
+    };
+    ranking: DashboardCarFitRankingItem[];
+  };
+  recommendedActions: DashboardContextAction[];
   insights: DashboardInsight[];
 };
 
@@ -166,13 +264,21 @@ type SessionSummary = {
   sourceSessionSetting: string | null;
   bestLapMs: number | null;
   averageLapMs: number | null;
+  optimalLapMs: number | null;
   lapConsistencyMs: number | null;
+  bestThreeLapAverageMs: number | null;
+  lastThreeLapAverageMs: number | null;
+  bestFiveLapAverageMs: number | null;
+  paceFadeMs: number | null;
   finishPos: number | null;
   positionGain: number | null;
   validLapRate: number | null;
   incidentsCount: number;
   penaltiesCount: number;
   trackLimitsCount: number;
+  averageFuelUsedPerLap: number | null;
+  tireDropFrontPerLap: number | null;
+  tireDropRearPerLap: number | null;
 };
 
 function normalizeText(value: string | null | undefined) {
@@ -211,7 +317,13 @@ function buildTextCandidates(...values: Array<string | null | undefined>) {
   const candidates = new Set<string>();
 
   for (const value of values) {
+    const rawValue = value?.trim().toLocaleLowerCase() ?? '';
     const normalizedValue = normalizeText(value);
+
+    if (rawValue) {
+      candidates.add(rawValue);
+      candidates.add(rawValue.replace(/\s+/g, ''));
+    }
 
     if (!normalizedValue) {
       continue;
@@ -219,6 +331,44 @@ function buildTextCandidates(...values: Array<string | null | undefined>) {
 
     candidates.add(normalizedValue);
     candidates.add(normalizeCompactText(value));
+  }
+
+  return Array.from(candidates);
+}
+
+function buildTrackCandidates(...values: Array<string | null | undefined>) {
+  const genericTrackTokens = new Set([
+    'autodromo',
+    'autodrome',
+    'circuit',
+    'de',
+    'di',
+    'do',
+    'international',
+    'motor',
+    'park',
+    'road',
+    'speedway',
+    'the',
+    'track',
+  ]);
+  const candidates = new Set(buildTextCandidates(...values));
+
+  for (const value of values) {
+    const normalizedValue = normalizeText(value);
+
+    if (!normalizedValue) {
+      continue;
+    }
+
+    const tokens = normalizedValue
+      .split(' ')
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3 && !genericTrackTokens.has(token));
+
+    for (const token of tokens) {
+      candidates.add(token);
+    }
   }
 
   return Array.from(candidates);
@@ -323,6 +473,37 @@ function roundTo(value: number | null, decimals: number) {
   return Math.round(value * factor) / factor;
 }
 
+function computeBestFiveLapAverageMs(laps: SessionLapRow[]) {
+  const validLapTimes = laps
+    .slice()
+    .sort((left, right) => left.lap_number - right.lap_number)
+    .filter(
+      (lap): lap is SessionLapRow & { lap_time_seconds: number } =>
+        !lap.pit_flag &&
+        lap.is_valid_lap &&
+        lap.lap_time_seconds !== null &&
+        lap.lap_time_seconds > 0,
+    )
+    .map((lap) => lap.lap_time_seconds * 1000);
+
+  if (validLapTimes.length < 5) {
+    return null;
+  }
+
+  let bestAverage = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index <= validLapTimes.length - 5; index += 1) {
+    const window = validLapTimes.slice(index, index + 5);
+    const windowAverage = window.reduce((sum, value) => sum + value, 0) / window.length;
+
+    if (windowAverage < bestAverage) {
+      bestAverage = windowAverage;
+    }
+  }
+
+  return Math.round(bestAverage);
+}
+
 function parseDateInput(value: string | undefined, endOfDay = false) {
   if (!value) {
     return null;
@@ -341,7 +522,7 @@ function resolveSessionCatalogFilters(
     carClasses.find((carClass) => carClass.slug.toLowerCase() === 'lmgt3')?.id ?? carClasses[0]?.id;
   const selectedCarClassId = carClasses.some((carClass) => carClass.id === filters.carClassId)
     ? filters.carClassId
-    : undefined;
+    : defaultCarClassId;
   const carsForSelectedClass = selectedCarClassId
     ? cars.filter((car) => car.car_class_id === selectedCarClassId)
     : cars;
@@ -381,8 +562,13 @@ function buildSessionSummary(
     bestLapMs:
       session.best_lap_seconds !== null ? Math.round(session.best_lap_seconds * 1000) : null,
     averageLapMs: session.average_lap_ms,
+    optimalLapMs: session.optimal_lap_ms,
     lapConsistencyMs:
       session.lap_consistency_ms !== null ? Number(session.lap_consistency_ms) : null,
+    bestThreeLapAverageMs: session.best_three_lap_average_ms,
+    lastThreeLapAverageMs: session.last_three_lap_average_ms,
+    bestFiveLapAverageMs: null,
+    paceFadeMs: session.pace_fade_ms,
     finishPos: session.finish_pos,
     positionGain:
       session.grid_pos !== null && session.finish_pos !== null
@@ -392,6 +578,12 @@ function buildSessionSummary(
     incidentsCount: session.incidents_count,
     penaltiesCount: session.penalties_count,
     trackLimitsCount: session.track_limits_count,
+    averageFuelUsedPerLap:
+      session.average_fuel_used_per_lap !== null ? Number(session.average_fuel_used_per_lap) : null,
+    tireDropFrontPerLap:
+      session.tire_drop_front_per_lap !== null ? Number(session.tire_drop_front_per_lap) : null,
+    tireDropRearPerLap:
+      session.tire_drop_rear_per_lap !== null ? Number(session.tire_drop_rear_per_lap) : null,
   };
 }
 
@@ -494,6 +686,299 @@ function buildRankingItems(
     })
     .filter((item) => item.sessions >= minimumSessions)
     .sort((left, right) => right.score - left.score);
+}
+
+function scoreCarFitEntry(entry: {
+  bestLapMs: number | null;
+  bestFiveLapAverageMs: number | null;
+  lapConsistencyMs: number | null;
+  paceFadeMs: number | null;
+  averagePositionGain: number | null;
+  averageIncidents: number | null;
+  sessions: number;
+}) {
+  let score = 55;
+
+  if (entry.bestLapMs !== null) {
+    score += Math.max(0, 170000 - entry.bestLapMs) / 900;
+  }
+
+  if (entry.bestFiveLapAverageMs !== null) {
+    score += Math.max(0, 175000 - entry.bestFiveLapAverageMs) / 800;
+  }
+
+  if (entry.lapConsistencyMs !== null) {
+    score += Math.max(0, 2800 - entry.lapConsistencyMs) / 160;
+  }
+
+  if (entry.paceFadeMs !== null) {
+    score -= Math.max(0, entry.paceFadeMs) / 220;
+  }
+
+  if (entry.averagePositionGain !== null) {
+    score += Math.max(-8, Math.min(8, entry.averagePositionGain)) * 1.7;
+  }
+
+  if (entry.averageIncidents !== null) {
+    score -= Math.min(12, entry.averageIncidents * 2.4);
+  }
+
+  score += Math.min(10, entry.sessions) * 1.1;
+
+  return roundTo(score, 1) ?? 0;
+}
+
+function buildCarFitRanking(
+  sessions: SessionSummary[],
+  minimumSessions: number,
+): DashboardCarFitRankingItem[] {
+  const groups = new Map<string, SessionSummary[]>();
+
+  for (const session of sessions) {
+    if (!session.carName || session.carName === 'Coche no disponible') {
+      continue;
+    }
+
+    const current = groups.get(session.carName) ?? [];
+    current.push(session);
+    groups.set(session.carName, current);
+  }
+
+  return Array.from(groups.entries())
+    .map(([carName, items]) => {
+      const bestLapValues = items
+        .map((item) => item.bestLapMs)
+        .filter((value): value is number => typeof value === 'number');
+      const bestFiveLapValues = items
+        .map((item) => item.bestFiveLapAverageMs)
+        .filter((value): value is number => typeof value === 'number');
+      const entry = {
+        carName,
+        sessions: items.length,
+        confidence: getConfidenceLevel(items.length),
+        bestLapMs: average(items.map((item) => item.bestLapMs)),
+        bestFiveLapAverageMs: average(items.map((item) => item.bestFiveLapAverageMs)),
+        representativeBestLapMs: bestLapValues.length > 0 ? Math.min(...bestLapValues) : null,
+        representativeBestFiveLapAverageMs:
+          bestFiveLapValues.length > 0 ? Math.min(...bestFiveLapValues) : null,
+        lapConsistencyMs: average(items.map((item) => item.lapConsistencyMs)),
+        paceFadeMs: average(items.map((item) => item.paceFadeMs)),
+        averagePositionGain: average(items.map((item) => item.positionGain)),
+        averageIncidents: average(items.map((item) => item.incidentsCount)),
+        fitScore: 0,
+      } satisfies DashboardCarFitRankingItem;
+
+      return {
+        ...entry,
+        fitScore: scoreCarFitEntry(entry),
+      };
+    })
+    .filter((item) => item.sessions >= minimumSessions)
+    .sort((left, right) => right.fitScore - left.fitScore);
+}
+
+function selectCarFitWinner(
+  ranking: DashboardCarFitRankingItem[],
+  key: keyof Pick<
+    DashboardCarFitRankingItem,
+    | 'representativeBestLapMs'
+    | 'representativeBestFiveLapAverageMs'
+    | 'lapConsistencyMs'
+    | 'averagePositionGain'
+    | 'fitScore'
+  >,
+  format: DashboardKpi['format'],
+  supportingLabel: string,
+  betterWhenLower: boolean,
+): DashboardCarFitWinner | null {
+  const candidates = ranking.filter((item) => item[key] !== null);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const sorted = candidates.slice().sort((left, right) => {
+    const leftValue = left[key] as number;
+    const rightValue = right[key] as number;
+
+    return betterWhenLower ? leftValue - rightValue : rightValue - leftValue;
+  });
+  const first = sorted[0];
+  const second = sorted[1];
+  const primaryValue = first[key] as number;
+  const secondValue = second?.[key] ?? null;
+
+  return {
+    carName: first.carName,
+    primaryValue,
+    format,
+    gapToNext:
+      typeof secondValue === 'number'
+        ? roundTo(
+            betterWhenLower ? secondValue - primaryValue : primaryValue - secondValue,
+            format === 'percent' ? 4 : 1,
+          )
+        : null,
+    confidence: first.confidence,
+    supportingLabel,
+  };
+}
+
+function buildContextSummary({
+  filteredSessions,
+  selectedTrackName,
+  selectedClassName,
+  selectedCarName,
+  topCarFit,
+  recentVsBaseline,
+  selectedSourceSessionSetting,
+  allSourceSessionSetting,
+}: {
+  filteredSessions: SessionSummary[];
+  selectedTrackName: string | null;
+  selectedClassName: string | null;
+  selectedCarName: string | null;
+  topCarFit: DashboardCarFitRankingItem | null;
+  recentVsBaseline: DriverOverviewData['recentVsBaseline'];
+  selectedSourceSessionSetting: string;
+  allSourceSessionSetting: string;
+}) {
+  const comparedCarsCount = new Set(filteredSessions.map((session) => session.carName)).size;
+  const comparedTracksCount = new Set(filteredSessions.map((session) => session.trackName)).size;
+  const trendByKey = new Map(recentVsBaseline.metrics.map((metric) => [metric.key, metric]));
+  const paceDirection = trendByKey.get('bestLapMs')?.direction;
+  const consistencyDirection = trendByKey.get('lapConsistencyMs')?.direction;
+  const validityDirection = trendByKey.get('validLapRate')?.direction;
+
+  const contextBits = [selectedClassName, selectedTrackName, selectedCarName].filter(Boolean);
+  const contextLabel = contextBits.length > 0 ? contextBits.join(' · ') : 'tu muestra actual';
+  const headline = selectedTrackName
+    ? `${selectedTrackName}: ${topCarFit?.carName ?? 'todavía sin coche claro'} como referencia más completa`
+    : `Panorama general de ${contextLabel}`;
+
+  let subheadline = `Ahora mismo estás comparando ${filteredSessions.length} sesiones en ${contextLabel}.`;
+
+  if (
+    filteredSessions.length === 0 &&
+    normalizeSessionSetting(selectedSourceSessionSetting) !==
+      normalizeSessionSetting(allSourceSessionSetting)
+  ) {
+    subheadline = `No hay sesiones dentro de ${contextLabel} con el origen ${selectedSourceSessionSetting}. Si sabes que existen, cambia el origen a ${allSourceSessionSetting} para ampliar la muestra.`;
+  } else if (selectedTrackName && topCarFit) {
+    subheadline = `${topCarFit.carName} es la base más equilibrada con la muestra actual. ${
+      paceDirection === 'better'
+        ? 'El ritmo reciente sube'
+        : consistencyDirection === 'better'
+          ? 'La mejora reciente viene por consistencia'
+          : validityDirection === 'worse'
+            ? 'Pero la limpieza merece atención'
+            : 'La lectura principal viene por el equilibrio entre ritmo y ejecución'
+    }.`;
+  } else if (paceDirection === 'better' && consistencyDirection === 'better') {
+    subheadline = `Estás mejorando a la vez en velocidad y repetibilidad dentro de ${contextLabel}.`;
+  } else if (validityDirection === 'worse') {
+    subheadline = `Tu progreso en ${contextLabel} está condicionado por una caída en la tasa de vueltas válidas.`;
+  }
+
+  return {
+    headline,
+    subheadline,
+    activeClassName: selectedClassName,
+    activeTrackName: selectedTrackName,
+    activeCarName: selectedCarName,
+    comparedCarsCount,
+    comparedTracksCount,
+  };
+}
+
+function buildRecommendedActions({
+  selectedTrackName,
+  carFitRanking,
+  topCars,
+  recentVsBaseline,
+  cleanliness,
+}: {
+  selectedTrackName: string | null;
+  carFitRanking: DashboardCarFitRankingItem[];
+  topCars: DashboardRankingItem[];
+  recentVsBaseline: DriverOverviewData['recentVsBaseline'];
+  cleanliness: DriverOverviewData['cleanliness'];
+}) {
+  const actions: DashboardContextAction[] = [];
+  const topCarFit = carFitRanking[0];
+  const consistencyWinner = selectCarFitWinner(
+    carFitRanking,
+    'lapConsistencyMs',
+    'lapTime',
+    'el coche que mejor repite el ritmo',
+    true,
+  );
+  const oneLapWinner = selectCarFitWinner(
+    carFitRanking,
+    'representativeBestLapMs',
+    'lapTime',
+    'el coche con más techo a una vuelta',
+    true,
+  );
+  const metricByKey = new Map(recentVsBaseline.metrics.map((metric) => [metric.key, metric]));
+  const incidentsTrend = metricByKey.get('incidentsCount');
+  const consistencyTrend = metricByKey.get('lapConsistencyMs');
+
+  if (selectedTrackName && topCarFit) {
+    actions.push({
+      id: 'use-top-fit',
+      tone: 'positive',
+      label: 'Usar',
+      title: `${topCarFit.carName} es la mejor base para ${selectedTrackName}`,
+      body: 'Es el coche que mejor equilibra ritmo, stint corto, consistencia y ejecución con la muestra actual.',
+    });
+  } else if (topCars[0]) {
+    actions.push({
+      id: 'use-top-car',
+      tone: 'positive',
+      label: 'Usar',
+      title: `${topCars[0].label} está siendo tu coche más fiable`,
+      body: 'Si buscas una base estable para seguir desarrollándote, ahora mismo es tu referencia más consistente.',
+    });
+  }
+
+  if (oneLapWinner && consistencyWinner && oneLapWinner.carName !== consistencyWinner.carName) {
+    actions.push({
+      id: 'watch-split',
+      tone: 'neutral',
+      label: 'Vigilar',
+      title: `${oneLapWinner.carName} y ${consistencyWinner.carName} cumplen roles distintos`,
+      body: 'Uno te da más techo a una vuelta y el otro más facilidad para repetir ritmo. Conviene elegir según objetivo de sesión.',
+    });
+  } else if (cleanliness.cleanSessionRate !== null && cleanliness.cleanSessionRate < 0.45) {
+    actions.push({
+      id: 'watch-cleanliness',
+      tone: 'warning',
+      label: 'Vigilar',
+      title: 'La limpieza sigue limitando la lectura del rendimiento',
+      body: 'Hay demasiadas sesiones con incidentes, sanciones o track limits como para fiarte sólo del tiempo por vuelta.',
+    });
+  }
+
+  if (incidentsTrend?.direction === 'worse') {
+    actions.push({
+      id: 'work-incidents',
+      tone: 'warning',
+      label: 'Trabajar',
+      title: 'Toca bajar el coste de los errores',
+      body: 'Tus últimas sesiones están pagando más incidentes que la base histórica. El siguiente salto viene por control y no por forzar más.',
+    });
+  } else if (consistencyTrend?.direction !== 'better') {
+    actions.push({
+      id: 'work-consistency',
+      tone: 'neutral',
+      label: 'Trabajar',
+      title: 'La siguiente mejora debe venir del ritmo sostenido',
+      body: 'Hay margen en repetir tandas más compactas y en sostener el coche varias vueltas, no sólo en buscar una vuelta pico.',
+    });
+  }
+
+  return actions.slice(0, 3);
 }
 
 function formatDateRangeLabel(sessions: SessionSummary[]) {
@@ -746,8 +1231,8 @@ export async function getDriverOverviewData(
   });
   const supabase = await createClient();
   const { carClasses, cars, tracks } = await getSetupCatalog();
-  const defaultSourceSessionSetting = 'Multiplayer';
   const allSourceSessionSetting = 'Todos';
+  const defaultSourceSessionSetting = 'Multiplayer';
   const rankingThreshold = 3;
 
   const { defaultCarClassId, selectedCarClassId, carsForSelectedClass, selectedCarId } =
@@ -777,14 +1262,16 @@ export async function getDriverOverviewData(
         .filter((value) => value.length > 0),
     ),
   );
-  const sessionSettings = [
-    allSourceSessionSetting,
-    defaultSourceSessionSetting,
-    ...discoveredSessionSettings.filter(
-      (value) =>
-        normalizeSessionSetting(value) !== normalizeSessionSetting(defaultSourceSessionSetting),
-    ),
-  ].map((value) => ({ id: value, name: value }));
+  const sessionSettings = Array.from(
+    new Set([
+      allSourceSessionSetting,
+      defaultSourceSessionSetting,
+      ...discoveredSessionSettings.filter(
+        (value) =>
+          normalizeSessionSetting(value) !== normalizeSessionSetting(defaultSourceSessionSetting),
+      ),
+    ]),
+  ).map((value) => ({ id: value, name: value }));
   const selectedSourceSessionSetting =
     sessionSettings.find(
       (setting) =>
@@ -849,7 +1336,7 @@ export async function getDriverOverviewData(
     selectedCar?.slug,
     selectedCar?.name,
   );
-  const selectedTrackCandidates = buildTextCandidates(
+  const selectedTrackCandidates = buildTrackCandidates(
     selectedTrack?.name,
     selectedTrack?.slug,
     selectedTrack?.official_name,
@@ -861,7 +1348,7 @@ export async function getDriverOverviewData(
   let linkedSessionsQuery = supabase
     .from('setup_sessions')
     .select(
-      'id, setup_id, imported_at, session_datetime, session_type, source_session_setting, track_venue, track_course, car_class, car_type, best_lap_seconds, average_lap_ms, lap_consistency_ms, finish_pos, grid_pos, valid_lap_rate, incidents_count, penalties_count, track_limits_count',
+      'id, setup_id, imported_at, session_datetime, session_type, source_session_setting, track_venue, track_course, car_class, car_type, best_lap_seconds, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, finish_pos, grid_pos, valid_lap_rate, incidents_count, penalties_count, track_limits_count, average_fuel_used_per_lap, tire_drop_front_per_lap, tire_drop_rear_per_lap',
     )
     .eq('owner_user_id', userId)
     .not('setup_id', 'is', null)
@@ -876,14 +1363,14 @@ export async function getDriverOverviewData(
   let standaloneSessionsQuery = supabase
     .from('setup_sessions')
     .select(
-      'id, setup_id, imported_at, session_datetime, session_type, source_session_setting, track_venue, track_course, car_class, car_type, best_lap_seconds, average_lap_ms, lap_consistency_ms, finish_pos, grid_pos, valid_lap_rate, incidents_count, penalties_count, track_limits_count',
+      'id, setup_id, imported_at, session_datetime, session_type, source_session_setting, track_venue, track_course, car_class, car_type, best_lap_seconds, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, finish_pos, grid_pos, valid_lap_rate, incidents_count, penalties_count, track_limits_count, average_fuel_used_per_lap, tire_drop_front_per_lap, tire_drop_rear_per_lap',
     )
     .eq('owner_user_id', userId)
     .is('setup_id', null)
     .order('session_datetime', { ascending: false, nullsFirst: false })
     .order('imported_at', { ascending: false });
 
-  if (selectedSourceSessionSetting) {
+  if (normalizedSelectedSourceSessionSetting) {
     linkedSessionsQuery = linkedSessionsQuery.eq(
       'source_session_setting',
       selectedSourceSessionSetting,
@@ -935,7 +1422,7 @@ export async function getDriverOverviewData(
     ...((standaloneSessionsResult.data ?? []) as SetupSessionRow[]),
   ];
 
-  const filteredSessions = rawSessions
+  let filteredSessions = rawSessions
     .map((rawSession) => ({
       rawSession,
       session: buildSessionSummary(
@@ -991,9 +1478,9 @@ export async function getDriverOverviewData(
         if (
           session.trackId !== selectedTrackId &&
           normalizedSessionTrackName !== normalizedSelectedTrackName &&
-          !matchesCandidateText(session.trackName, selectedTrackCandidates) &&
-          !matchesCandidateText(rawSession.track_venue, selectedTrackCandidates) &&
-          !matchesCandidateText(rawSession.track_course, selectedTrackCandidates)
+          !matchesCandidateText(session.trackName, selectedTrackCandidates, 4) &&
+          !matchesCandidateText(rawSession.track_venue, selectedTrackCandidates, 4) &&
+          !matchesCandidateText(rawSession.track_course, selectedTrackCandidates, 4)
         ) {
           return false;
         }
@@ -1018,6 +1505,32 @@ export async function getDriverOverviewData(
     .map(({ session }) => session)
     .sort((left, right) => Date.parse(right.sessionDate) - Date.parse(left.sessionDate));
 
+  const filteredSessionIds = filteredSessions.map((session) => session.id);
+
+  if (filteredSessionIds.length > 0) {
+    const sessionLapsResult = await supabase
+      .from('setup_session_laps')
+      .select('session_id, lap_number, lap_time_seconds, pit_flag, is_valid_lap')
+      .in('session_id', filteredSessionIds);
+
+    if (sessionLapsResult.error) {
+      throw sessionLapsResult.error;
+    }
+
+    const lapsBySessionId = new Map<string, SessionLapRow[]>();
+
+    for (const lap of (sessionLapsResult.data ?? []) as SessionLapRow[]) {
+      const current = lapsBySessionId.get(lap.session_id) ?? [];
+      current.push(lap);
+      lapsBySessionId.set(lap.session_id, current);
+    }
+
+    filteredSessions = filteredSessions.map((session) => ({
+      ...session,
+      bestFiveLapAverageMs: computeBestFiveLapAverageMs(lapsBySessionId.get(session.id) ?? []),
+    }));
+  }
+
   const trends: TrendPoint[] = filteredSessions.map((session) => ({
     sessionId: session.id,
     sessionDate: session.sessionDate,
@@ -1040,7 +1553,7 @@ export async function getDriverOverviewData(
       description: 'Base activa del análisis actual',
     },
     {
-      label: 'Mejor vuelta',
+      label: '1 vuelta',
       value: (() => {
         const bestLaps = trends
           .map((item) => item.bestLapMs)
@@ -1048,31 +1561,30 @@ export async function getDriverOverviewData(
         return bestLaps.length > 0 ? Math.min(...bestLaps) : null;
       })(),
       format: 'lapTime',
-      description: 'Pico de ritmo dentro del filtro',
+      description: 'Tu pico de ritmo dentro del contexto',
     },
     {
-      label: 'Consistencia media',
+      label: '5 vueltas',
+      value: (() => {
+        const bestFiveLapValues = filteredSessions
+          .map((item) => item.bestFiveLapAverageMs)
+          .filter((value): value is number => typeof value === 'number');
+        return bestFiveLapValues.length > 0 ? Math.min(...bestFiveLapValues) : null;
+      })(),
+      format: 'lapTime',
+      description: 'Tu mejor bloque real de 5 vueltas dentro del contexto',
+    },
+    {
+      label: 'Consistencia',
       value: roundTo(average(trends.map((item) => item.lapConsistencyMs)), 1),
       format: 'lapTime',
-      description: 'Cuánto se abre tu ritmo entre vueltas',
+      description: 'Lo compactas que salen tus tandas',
     },
     {
-      label: 'Posiciones ganadas',
+      label: 'Racecraft',
       value: roundTo(average(trends.map((item) => item.positionGain)), 1),
       format: 'position',
-      description: 'Ejecución media de carrera',
-    },
-    {
-      label: 'Vueltas válidas',
-      value: roundTo(average(trends.map((item) => item.validLapRate)), 4),
-      format: 'percent',
-      description: 'Control y limpieza sobre el stint',
-    },
-    {
-      label: 'Incidentes / sesión',
-      value: roundTo(average(trends.map((item) => item.incidentsCount)), 1),
-      format: 'decimal',
-      description: 'Riesgo que estás pagando por tanda',
+      description: 'Cómo conviertes el contexto en posiciones',
     },
   ];
 
@@ -1120,6 +1632,100 @@ export async function getDriverOverviewData(
           )
         : null,
   };
+  const contextDiagnostics = {
+    pace: {
+      bestLapMs: (() => {
+        const bestLaps = filteredSessions
+          .map((item) => item.bestLapMs)
+          .filter((value): value is number => typeof value === 'number');
+        return bestLaps.length > 0 ? Math.min(...bestLaps) : null;
+      })(),
+      optimalLapMs: roundTo(average(filteredSessions.map((item) => item.optimalLapMs)), 1),
+      gapToOptimalMs: (() => {
+        const bestLap = filteredSessions
+          .map((item) => item.bestLapMs)
+          .filter((value): value is number => typeof value === 'number');
+        const optimal = filteredSessions
+          .map((item) => item.optimalLapMs)
+          .filter((value): value is number => typeof value === 'number');
+
+        if (bestLap.length === 0 || optimal.length === 0) {
+          return null;
+        }
+
+        const averageBestLap = average(bestLap);
+        const averageOptimalLap = average(optimal);
+
+        if (averageBestLap === null || averageOptimalLap === null) {
+          return null;
+        }
+
+        return roundTo(averageBestLap - averageOptimalLap, 1);
+      })(),
+      bestThreeLapAverageMs: roundTo(
+        average(filteredSessions.map((item) => item.bestThreeLapAverageMs)),
+        1,
+      ),
+    },
+    stint: {
+      bestFiveLapAverageMs: roundTo(
+        average(filteredSessions.map((item) => item.bestFiveLapAverageMs)),
+        1,
+      ),
+      lastThreeLapAverageMs: roundTo(
+        average(filteredSessions.map((item) => item.lastThreeLapAverageMs)),
+        1,
+      ),
+      paceFadeMs: roundTo(average(filteredSessions.map((item) => item.paceFadeMs)), 1),
+      averageFuelUsedPerLap: roundTo(
+        average(filteredSessions.map((item) => item.averageFuelUsedPerLap)),
+        2,
+      ),
+      tireDropFrontPerLap: roundTo(
+        average(filteredSessions.map((item) => item.tireDropFrontPerLap)),
+        2,
+      ),
+      tireDropRearPerLap: roundTo(
+        average(filteredSessions.map((item) => item.tireDropRearPerLap)),
+        2,
+      ),
+    },
+    execution: {
+      averageFinishPosition: roundTo(average(finishedSessions.map((item) => item.finishPos)), 1),
+      averagePositionGain: roundTo(average(filteredSessions.map((item) => item.positionGain)), 1),
+      winsRate:
+        finishedSessions.length > 0
+          ? roundTo(
+              finishedSessions.filter((item) => item.finishPos === 1).length /
+                finishedSessions.length,
+              4,
+            )
+          : null,
+      podiumsRate:
+        finishedSessions.length > 0
+          ? roundTo(
+              finishedSessions.filter((item) => (item.finishPos ?? 999) <= 3).length /
+                finishedSessions.length,
+              4,
+            )
+          : null,
+    },
+    cleanliness: {
+      validLapRate: roundTo(average(filteredSessions.map((item) => item.validLapRate)), 4),
+      cleanSessionRate: roundTo(
+        average(
+          filteredSessions.map((item) =>
+            item.incidentsCount === 0 && item.penaltiesCount === 0 && item.trackLimitsCount === 0
+              ? 1
+              : 0,
+          ),
+        ),
+        4,
+      ),
+      incidentsPerSession: roundTo(average(filteredSessions.map((item) => item.incidentsCount)), 1),
+      penaltiesPerSession: roundTo(average(filteredSessions.map((item) => item.penaltiesCount)), 1),
+    },
+  } satisfies DriverOverviewData['contextDiagnostics'];
   const cleanliness = {
     incidentsPerSession: roundTo(average(filteredSessions.map((item) => item.incidentsCount)), 1),
     penaltiesPerSession: roundTo(average(filteredSessions.map((item) => item.penaltiesCount)), 1),
@@ -1143,7 +1749,77 @@ export async function getDriverOverviewData(
   const topTracks = trackRankings.slice(0, 4);
   const weakTracks = [...trackRankings].slice(-4).reverse();
   const topCars = carRankings.slice(0, 4);
+  const selectedClassName =
+    carClasses.find((carClass) => carClass.id === selectedCarClassId)?.name ?? null;
+  const selectedTrackName = selectedTrack?.name ?? null;
+  const selectedCarName = selectedCar?.name ?? null;
+  const scopedCarFitSessions = filteredSessions.filter(
+    (session) =>
+      session.carName !== 'Coche no disponible' && session.trackName !== 'Circuito no disponible',
+  );
+  const carFitRanking = buildCarFitRanking(scopedCarFitSessions, rankingThreshold);
+  const carFit = {
+    active: Boolean(selectedTrackName),
+    trackLabel: selectedTrackName,
+    classLabel: selectedClassName,
+    comparedCarsCount: carFitRanking.length,
+    winners: {
+      oneLap: selectCarFitWinner(
+        carFitRanking,
+        'representativeBestLapMs',
+        'lapTime',
+        'El mejor techo a una vuelta',
+        true,
+      ),
+      fiveLap: selectCarFitWinner(
+        carFitRanking,
+        'representativeBestFiveLapAverageMs',
+        'lapTime',
+        'La mejor media sostenida a 5 vueltas',
+        true,
+      ),
+      consistency: selectCarFitWinner(
+        carFitRanking,
+        'lapConsistencyMs',
+        'lapTime',
+        'El coche más repetible en stint',
+        true,
+      ),
+      race: selectCarFitWinner(
+        carFitRanking,
+        'averagePositionGain',
+        'position',
+        'El coche que mejor convierte en carrera',
+        false,
+      ),
+      balanced: selectCarFitWinner(
+        carFitRanking,
+        'fitScore',
+        'decimal',
+        'La base más completa en este contexto',
+        false,
+      ),
+    },
+    ranking: carFitRanking,
+  } satisfies DriverOverviewData['carFit'];
   const insights = buildInsights(trends, cleanliness, recentVsBaseline, topTracks, topCars);
+  const contextSummary = buildContextSummary({
+    filteredSessions,
+    selectedTrackName,
+    selectedClassName,
+    selectedCarName,
+    topCarFit: carFitRanking[0] ?? null,
+    recentVsBaseline,
+    selectedSourceSessionSetting,
+    allSourceSessionSetting,
+  });
+  const recommendedActions = buildRecommendedActions({
+    selectedTrackName,
+    carFitRanking,
+    topCars,
+    recentVsBaseline,
+    cleanliness,
+  });
 
   const response = {
     filters,
@@ -1168,15 +1844,19 @@ export async function getDriverOverviewData(
       totalSessions: filteredSessions.length,
       dateRangeLabel: formatDateRangeLabel(filteredSessions),
     },
+    contextSummary,
     pilotSummary,
     rankingThreshold,
     kpis,
+    contextDiagnostics,
     cleanliness,
     trends,
     recentVsBaseline,
     topTracks,
     weakTracks,
     topCars,
+    carFit,
+    recommendedActions,
     insights,
   } satisfies DriverOverviewData;
 
@@ -1188,6 +1868,7 @@ export async function getDriverOverviewData(
     trendRows: trends.length,
     topTrackCandidates: trackRankings.length,
     topCarCandidates: carRankings.length,
+    carFitCandidates: carFitRanking.length,
   });
 
   return response;

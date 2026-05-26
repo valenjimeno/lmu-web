@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { routes } from '@/lib/constants/routes';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { getUserEntitlements } from '@/services/entitlement.service';
 import {
   deleteSetupSession,
   importSetupSession,
@@ -137,6 +138,12 @@ export async function createSessionAction(formData: FormData) {
 
     if (normalizedSessions.length === 0) {
       redirect(`${returnTo}?error=import_invalid_xml`);
+    }
+
+    const entitlements = await getUserEntitlements(user.id);
+
+    if (normalizedSessions.length > 1 && !entitlements.canBulkImportSessions) {
+      redirect(`${returnTo}?error=bulk_import_requires_pro`);
     }
 
     try {

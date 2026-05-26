@@ -184,7 +184,7 @@ export async function getSetupPageData(
     .from('setups')
     .select(
       'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
-      { count: 'planned' },
+      { count: 'exact' },
     )
     .eq('owner_user_id', userId);
 

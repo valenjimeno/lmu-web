@@ -25,6 +25,8 @@ type ImportSessionsFormProps = {
   returnTo?: string;
   submitLabel?: string;
   onJobCreated?: (job: SessionImportJobSummary) => void;
+  canBulkImportSessions: boolean;
+  currentPlan: 'lite' | 'pro';
 };
 
 type SessionImportEntry = {
@@ -111,6 +113,8 @@ function ImportSessionsFormBody({
   canSubmit,
   submitLabel,
   isSubmitting,
+  canBulkImportSessions,
+  currentPlan,
 }: {
   sessionTypeFilter: SessionTypeFilter;
   setSessionTypeFilter: (value: SessionTypeFilter) => void;
@@ -121,6 +125,8 @@ function ImportSessionsFormBody({
   canSubmit: boolean;
   submitLabel: string;
   isSubmitting: boolean;
+  canBulkImportSessions: boolean;
+  currentPlan: 'lite' | 'pro';
 }) {
   const autoMatchedCount = entries.filter((entry) => entry.matchState === 'matched').length;
   const needsSelectionEntries = entries.filter((entry) => entry.matchState === 'needs-selection');
@@ -156,15 +162,16 @@ function ImportSessionsFormBody({
         <input
           type="file"
           accept=".xml,text/xml,application/xml"
-          multiple
+          multiple={canBulkImportSessions}
           onChange={handleFileChange}
           className={`${inputClassName} file:mr-4 file:rounded-full file:border-0 file:bg-[rgba(225,178,122,0.18)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#f5d4aa]`}
         />
       </label>
 
       <p className="text-xs leading-6 text-muted">
-        Puedes seleccionar varios XML de una vez. Intentaremos encontrar automáticamente tu piloto
-        usando: {preferredDriverSummary}
+        {canBulkImportSessions
+          ? `Puedes seleccionar varios XML de una vez. Intentaremos encontrar automáticamente tu piloto usando: ${preferredDriverSummary}`
+          : `El plan ${currentPlan === 'lite' ? 'Lite' : 'actual'} solo permite seleccionar un XML por importación. Intentaremos encontrar automáticamente tu piloto usando: ${preferredDriverSummary}`}
       </p>
 
       {entries.length > 0 ? (
@@ -184,6 +191,11 @@ function ImportSessionsFormBody({
             {duplicateCount > 0 ? (
               <span className="rounded-full border border-[#ff6b5730] bg-[#ff6b570a] px-3 py-1 text-xs text-[#f3b4aa]">
                 {duplicateCount} duplicados bloqueados
+              </span>
+            ) : null}
+            {!canBulkImportSessions ? (
+              <span className="rounded-full border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.08)] px-3 py-1 text-xs text-[#f5d4aa]">
+                Plan Lite: 1 XML por vez
               </span>
             ) : null}
           </div>
@@ -346,6 +358,8 @@ export function ImportSessionsForm({
   returnTo,
   submitLabel = 'Importar sesiones',
   onJobCreated,
+  canBulkImportSessions,
+  currentPlan,
 }: ImportSessionsFormProps) {
   const [allEntries, setAllEntries] = useState<SessionImportEntry[]>([]);
   const [sessionTypeFilter, setSessionTypeFilter] = useState<SessionTypeFilter>('all');
@@ -382,6 +396,16 @@ export function ImportSessionsForm({
       return;
     }
 
+    if (!canBulkImportSessions && selectedFiles.length > 1) {
+      setAllEntries([]);
+      setSubmitError(
+        'El plan Lite solo permite importar una sesión cada vez. Selecciona un único XML o pásate a Pro para importar en lote.',
+      );
+      event.target.value = '';
+      return;
+    }
+
+    setSubmitError(null);
     const builtEntries = await Promise.all(
       selectedFiles.map((file, index) => buildImportEntry(file, index, preferredDriverNames)),
     );
@@ -538,11 +562,13 @@ export function ImportSessionsForm({
       setSubmitError(
         code === 'unauthorized'
           ? 'Tu sesión ha caducado. Recarga la página e inténtalo de nuevo.'
-          : code === 'async_import_unavailable'
-            ? 'La cola de importación no está disponible todavía en este entorno. La base está preparada para funcionar totalmente en segundo plano, pero aquí aún no podemos activarla.'
-            : code === 'empty_import_job'
-              ? 'No hay XML válidos para encolar con el filtro actual.'
-              : 'No hemos podido dejar todos los XML preparados en segundo plano. No se ha iniciado la importación y hemos limpiado los ficheros temporales subidos.',
+          : code === 'bulk_import_requires_pro'
+            ? 'El plan Lite solo permite importar una sesión cada vez. Selecciona un único XML o pásate a Pro para importar en lote.'
+            : code === 'async_import_unavailable'
+              ? 'La cola de importación no está disponible todavía en este entorno. La base está preparada para funcionar totalmente en segundo plano, pero aquí aún no podemos activarla.'
+              : code === 'empty_import_job'
+                ? 'No hay XML válidos para encolar con el filtro actual.'
+                : 'No hemos podido dejar todos los XML preparados en segundo plano. No se ha iniciado la importación y hemos limpiado los ficheros temporales subidos.',
       );
     } finally {
       setIsSubmitting(false);
@@ -568,6 +594,8 @@ export function ImportSessionsForm({
         canSubmit={canSubmit}
         submitLabel={submitLabel}
         isSubmitting={isSubmitting}
+        canBulkImportSessions={canBulkImportSessions}
+        currentPlan={currentPlan}
       />
     </form>
   );

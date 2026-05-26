@@ -107,6 +107,65 @@ export type Database = {
         };
         Relationships: [];
       };
+      plan_features: {
+        Row: {
+          created_at: string;
+          enabled: boolean;
+          feature_key: string;
+          limit_value: number | null;
+          plan_code: Database['public']['Enums']['subscription_plan'];
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          enabled?: boolean;
+          feature_key: string;
+          limit_value?: number | null;
+          plan_code: Database['public']['Enums']['subscription_plan'];
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          enabled?: boolean;
+          feature_key?: string;
+          limit_value?: number | null;
+          plan_code?: Database['public']['Enums']['subscription_plan'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'plan_features_plan_code_fkey';
+            columns: ['plan_code'];
+            isOneToOne: false;
+            referencedRelation: 'plans';
+            referencedColumns: ['code'];
+          },
+        ];
+      };
+      plans: {
+        Row: {
+          code: Database['public']['Enums']['subscription_plan'];
+          created_at: string;
+          description: string | null;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          code: Database['public']['Enums']['subscription_plan'];
+          created_at?: string;
+          description?: string | null;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          code?: Database['public']['Enums']['subscription_plan'];
+          created_at?: string;
+          description?: string | null;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           active_team_id: string | null;
@@ -877,6 +936,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      subscriptions: {
+        Row: {
+          created_at: string;
+          current_period_end: string | null;
+          id: string;
+          plan_code: Database['public']['Enums']['subscription_plan'];
+          status: Database['public']['Enums']['subscription_status'];
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          current_period_end?: string | null;
+          id?: string;
+          plan_code?: Database['public']['Enums']['subscription_plan'];
+          status?: Database['public']['Enums']['subscription_status'];
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          current_period_end?: string | null;
+          id?: string;
+          plan_code?: Database['public']['Enums']['subscription_plan'];
+          status?: Database['public']['Enums']['subscription_status'];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'subscriptions_plan_code_fkey';
+            columns: ['plan_code'];
+            isOneToOne: false;
+            referencedRelation: 'plans';
+            referencedColumns: ['code'];
+          },
+        ];
+      };
       tracks: {
         Row: {
           city: string | null;
@@ -924,6 +1021,8 @@ export type Database = {
     Enums: {
       setup_type: 'fixed' | 'open';
       setup_visibility: 'private' | 'team' | 'public';
+      subscription_plan: 'lite' | 'pro';
+      subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'inactive';
       team_role: 'owner' | 'member';
     };
     CompositeTypes: {
@@ -1052,6 +1151,8 @@ export const Constants = {
     Enums: {
       setup_type: ['fixed', 'open'],
       setup_visibility: ['private', 'team', 'public'],
+      subscription_plan: ['lite', 'pro'],
+      subscription_status: ['active', 'canceled', 'past_due', 'trialing', 'inactive'],
       team_role: ['owner', 'member'],
     },
   },

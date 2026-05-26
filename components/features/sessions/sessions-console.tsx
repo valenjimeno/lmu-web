@@ -44,6 +44,8 @@ type SessionsConsoleProps = {
   feedbackTone?: string;
   preferredDriverName?: string;
   importJobs: SessionImportJobSummary[];
+  canBulkImportSessions: boolean;
+  currentPlan: 'lite' | 'pro';
 };
 
 type SessionImportProgressSummary = {
@@ -120,6 +122,8 @@ export function SessionsConsole({
   feedbackTone,
   preferredDriverName,
   importJobs,
+  canBulkImportSessions,
+  currentPlan,
 }: SessionsConsoleProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -449,6 +453,8 @@ export function SessionsConsole({
             </div>
             <CreateSessionModal
               preferredDriverName={preferredDriverName}
+              canBulkImportSessions={canBulkImportSessions}
+              currentPlan={currentPlan}
               onJobCreated={(job) => {
                 setPolledSessionImportJobs((currentJobs) => [
                   job,

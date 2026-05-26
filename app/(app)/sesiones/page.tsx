@@ -29,6 +29,8 @@ const errorMessages: Record<string, string> = {
     'El XML no tiene ninguna vuelta válida para el piloto seleccionado, así que no se puede importar.',
   import_duplicate_session:
     'Este XML ya estaba importado como sesión. No se puede subir la misma sesión más de una vez.',
+  bulk_import_requires_pro:
+    'El plan Lite solo permite importar una sesión cada vez. Pásate a Pro para usar importación masiva.',
   import_failed: 'No hemos podido importar la sesión. Inténtalo de nuevo en unos segundos.',
   delete_session_failed: 'No hemos podido borrar la sesión. Inténtalo de nuevo en unos segundos.',
 };
@@ -108,6 +110,8 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
       feedbackTone={feedbackTone}
       preferredDriverName={appContext.preferredDriverName}
       importJobs={importJobs}
+      canBulkImportSessions={appContext.entitlements.canBulkImportSessions}
+      currentPlan={appContext.entitlements.plan}
     />
   );
 }

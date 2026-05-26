@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { DashboardOverview } from '@/components/features/dashboard/dashboard-overview';
 import { routes } from '@/lib/constants/routes';
 import {
+  type DashboardMode,
   getDriverOverviewData,
   type DashboardTrendMetric,
   type DashboardTrendRange,
@@ -16,6 +17,7 @@ type DashboardPageProps = {
     trackId?: string;
     dateFrom?: string;
     dateTo?: string;
+    mode?: string;
     metric?: string;
     range?: string;
   }>;
@@ -32,6 +34,7 @@ const allowedMetrics = new Set<DashboardTrendMetric>([
 ]);
 
 const allowedRanges = new Set<DashboardTrendRange>(['10', '30', 'all']);
+const allowedModes = new Set<DashboardMode>(['global', 'contextual', 'compare']);
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const [appContext, resolvedSearchParams] = await Promise.all([
@@ -54,6 +57,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const range = allowedRanges.has(resolvedSearchParams.range as DashboardTrendRange)
     ? (resolvedSearchParams.range as DashboardTrendRange)
     : '30';
+  const mode = allowedModes.has(resolvedSearchParams.mode as DashboardMode)
+    ? (resolvedSearchParams.mode as DashboardMode)
+    : 'contextual';
   const data = await getDriverOverviewData(appContext.user.id, driverLabel, {
     sourceSessionSetting: resolvedSearchParams.sourceSessionSetting?.trim() || undefined,
     carClassId: resolvedSearchParams.carClassId?.trim() || undefined,
@@ -66,6 +72,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <DashboardOverview
       data={data}
+      mode={mode}
       metric={metric}
       range={range}
       basePath={routes.dashboard}
@@ -76,6 +83,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         trackId: resolvedSearchParams.trackId?.trim() || undefined,
         dateFrom: resolvedSearchParams.dateFrom?.trim() || undefined,
         dateTo: resolvedSearchParams.dateTo?.trim() || undefined,
+        mode,
         metric,
         range,
       }}

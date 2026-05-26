@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { getUserEntitlements } from '@/services/entitlement.service';
 import type { User } from '@supabase/supabase-js';
 import type { Database } from '@/types/database.types';
 import type { Profile, ProfileCompletion } from '@/types/profile.types';
@@ -151,11 +152,15 @@ export const getAuthenticatedAppContext = cache(async () => {
     return null;
   }
 
-  const profile = await ensureProfileForUser(user);
+  const [profile, entitlements] = await Promise.all([
+    ensureProfileForUser(user),
+    getUserEntitlements(user.id),
+  ]);
 
   return {
     user,
     profile,
+    entitlements,
     profileCompletion: buildProfileCompletion(profile),
     preferredDriverName: resolvePreferredDriverName(user, profile),
   };

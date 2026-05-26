@@ -11,12 +11,16 @@ type CreateSessionModalProps = {
   preferredDriverName?: string;
   triggerClassName?: string;
   onJobCreated?: (job: SessionImportJobSummary) => void;
+  canBulkImportSessions: boolean;
+  currentPlan: 'lite' | 'pro';
 };
 
 export function CreateSessionModal({
   preferredDriverName,
   triggerClassName,
   onJobCreated,
+  canBulkImportSessions,
+  currentPlan,
 }: CreateSessionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -74,9 +78,9 @@ export function CreateSessionModal({
                 Importar sesiones XML
               </h2>
               <p className="mt-2 text-sm leading-7 text-muted">
-                Selecciona varios XML de resultados en una sola vez y guarda cada sesión con su
-                propio nombre. Si no encontramos tu piloto automáticamente, podrás elegirlo antes de
-                importar.
+                {canBulkImportSessions
+                  ? 'Selecciona varios XML de resultados en una sola vez y guarda cada sesión con su propio nombre. Si no encontramos tu piloto automáticamente, podrás elegirlo antes de importar.'
+                  : `Tu plan ${currentPlan === 'lite' ? 'Lite' : 'actual'} permite importar una sola sesión por vez. Si no encontramos tu piloto automáticamente, podrás elegirlo antes de importar.`}
               </p>
             </div>
 
@@ -85,6 +89,8 @@ export function CreateSessionModal({
                 preferredDriverNames={preferredDriverName ? [preferredDriverName] : []}
                 returnTo={routes.sessions}
                 submitLabel="Importar sesiones"
+                canBulkImportSessions={canBulkImportSessions}
+                currentPlan={currentPlan}
                 onJobCreated={(job) => {
                   onJobCreated?.(job);
                   setIsOpen(false);

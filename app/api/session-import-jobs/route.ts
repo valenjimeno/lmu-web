@@ -2,6 +2,7 @@ import { after } from 'next/server';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import type { SessionTypeFilter } from '@/lib/utils/session-type';
+import { getUserEntitlements } from '@/services/entitlement.service';
 import {
   createSessionImportJob,
   drainSessionImportJob,
@@ -68,6 +69,11 @@ export async function POST(request: NextRequest) {
   }
 
   const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  const entitlements = await getUserEntitlements(user.id);
+
+  if (sessions.length > 1 && !entitlements.canBulkImportSessions) {
+    return NextResponse.json({ error: 'bulk_import_requires_pro' }, { status: 403 });
+  }
 
   try {
     const job = await createSessionImportJob({

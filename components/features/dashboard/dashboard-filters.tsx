@@ -1,57 +1,235 @@
-import { Button } from '@/components/ui/button';
-import type { DashboardFilters, DriverOverviewData } from '@/services/dashboard.service';
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cn } from '@/lib/utils/cn';
+import type { DashboardMode, DriverOverviewData } from '@/services/dashboard.service';
 
 type DashboardFiltersProps = {
   filters: DriverOverviewData['resolvedFilters'];
   options: DriverOverviewData['filterOptions'];
+  summary: DriverOverviewData['contextSummary'];
+  mode: DashboardMode;
+  basePath: string;
+  searchParams: Record<string, string | undefined>;
 };
 
-function isOptionSelected<T extends { id: string }>(options: T[], value: string | undefined) {
-  return value ? options.some((option) => option.id === value) : false;
+const modeOptions: Array<{ key: DashboardMode; label: string }> = [
+  { key: 'global', label: 'Global' },
+  { key: 'contextual', label: 'Contextual' },
+  { key: 'compare', label: 'Comparar' },
+];
+
+function buildHref(
+  basePath: string,
+  currentSearchParams: Record<string, string | undefined>,
+  updates: Record<string, string | undefined>,
+) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(currentSearchParams)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+  }
+
+  const search = params.toString();
+  return search ? `${basePath}?${search}` : basePath;
 }
 
-export function DashboardFilters({ filters, options }: DashboardFiltersProps) {
-  const carsForSelectedClass = filters.carClassId
-    ? options.cars.filter((car) => car.carClassId === filters.carClassId)
-    : options.cars;
-  const selectedCarId = isOptionSelected(carsForSelectedClass, filters.carId) ? filters.carId : '';
-  const selectedTrackId = isOptionSelected(options.tracks, filters.trackId) ? filters.trackId : '';
-  const selectedClassId = isOptionSelected(options.carClasses, filters.carClassId)
-    ? filters.carClassId
-    : '';
+export function DashboardFilters({
+  filters,
+  options,
+  summary,
+  mode,
+  basePath,
+  searchParams,
+}: DashboardFiltersProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [sourceSessionSetting, setSourceSessionSetting] = useState(filters.sourceSessionSetting);
+  const [carClassId, setCarClassId] = useState(filters.carClassId ?? '');
+  const [trackId, setTrackId] = useState(filters.trackId ?? '');
+  const [carId, setCarId] = useState(filters.carId ?? '');
+  const [dateFrom, setDateFrom] = useState(filters.dateFrom ?? '');
+  const [dateTo, setDateTo] = useState(filters.dateTo ?? '');
+  const hasMountedRef = useRef(false);
+
+  const carsForSelectedClass = useMemo(
+    () => (carClassId ? options.cars.filter((car) => car.carClassId === carClassId) : options.cars),
+    [carClassId, options.cars],
+  );
+  const activeFilters = useMemo(
+    () =>
+      [
+        sourceSessionSetting && sourceSessionSetting !== options.defaultSourceSessionSetting
+          ? { key: 'sourceSessionSetting', label: `Tipo: ${sourceSessionSetting}` }
+          : null,
+        carClassId
+          ? {
+              key: 'carClassId',
+              label: `Clase: ${options.carClasses.find((carClass) => carClass.id === carClassId)?.name ?? ''}`,
+            }
+          : null,
+        trackId
+          ? {
+              key: 'trackId',
+              label: `Circuito: ${options.tracks.find((track) => track.id === trackId)?.name ?? ''}`,
+            }
+          : null,
+        carId
+          ? {
+              key: 'carId',
+              label: `Coche: ${carsForSelectedClass.find((car) => car.id === carId)?.name ?? ''}`,
+            }
+          : null,
+        dateFrom ? { key: 'dateFrom', label: `Desde: ${dateFrom}` } : null,
+        dateTo ? { key: 'dateTo', label: `Hasta: ${dateTo}` } : null,
+      ].filter(Boolean) as Array<{ key: string; label: string }>,
+    [
+      carClassId,
+      carId,
+      carsForSelectedClass,
+      dateFrom,
+      dateTo,
+      options.carClasses,
+      options.defaultSourceSessionSetting,
+      options.tracks,
+      sourceSessionSetting,
+      trackId,
+    ],
+  );
+
+  const applyFilters = useCallback(
+    (nextFilters: {
+      sourceSessionSetting?: string;
+      carClassId?: string;
+      trackId?: string;
+      carId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    }) => {
+      const nextHref = buildHref(basePath, searchParams, {
+        sourceSessionSetting:
+          nextFilters.sourceSessionSetting &&
+          nextFilters.sourceSessionSetting !== options.defaultSourceSessionSetting
+            ? nextFilters.sourceSessionSetting
+            : undefined,
+        carClassId: nextFilters.carClassId || undefined,
+        trackId: nextFilters.trackId || undefined,
+        carId: nextFilters.carId || undefined,
+        dateFrom: nextFilters.dateFrom || undefined,
+        dateTo: nextFilters.dateTo || undefined,
+      });
+      const currentHref = buildHref(basePath, searchParams, {});
+
+      if (nextHref !== currentHref) {
+        router.push(nextHref);
+      }
+    },
+    [basePath, options.defaultSourceSessionSetting, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      applyFilters({
+        sourceSessionSetting,
+        carClassId,
+        trackId,
+        carId,
+        dateFrom,
+        dateTo,
+      });
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [applyFilters, carClassId, carId, dateFrom, dateTo, sourceSessionSetting, trackId]);
+
+  const clearHref = buildHref(basePath, searchParams, {
+    carClassId: undefined,
+    trackId: undefined,
+    carId: undefined,
+    sourceSessionSetting: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+  });
+
+  function clearSingleFilter(key: string) {
+    switch (key) {
+      case 'sourceSessionSetting':
+        setSourceSessionSetting(options.defaultSourceSessionSetting);
+        break;
+      case 'carClassId':
+        setCarClassId('');
+        setCarId('');
+        break;
+      case 'trackId':
+        setTrackId('');
+        break;
+      case 'carId':
+        setCarId('');
+        break;
+      case 'dateFrom':
+        setDateFrom('');
+        break;
+      case 'dateTo':
+        setDateTo('');
+        break;
+      default:
+        break;
+    }
+  }
 
   return (
-    <form className="app-shell-card rounded-[1.8rem] p-5 sm:p-6">
-      <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="section-kicker font-semibold">Scope</p>
-            <h3 className="editorial-title mt-2 text-2xl text-white">Filtra la lectura</h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              Cambia coche, pista, origen o ventana temporal para mirar si tu mejora es real o sólo
-              depende del contexto.
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <Button type="submit" variant="secondary">
-              Aplicar filtros
-            </Button>
-            <Button asChild href="/dashboard" variant="ghost">
-              Limpiar
-            </Button>
-          </div>
+    <section className="app-shell-card overflow-hidden rounded-[1.8rem]">
+      <div className="hairline-divider flex flex-col gap-3 border-b px-5 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-baseline gap-3">
+          <p className="section-kicker font-semibold">Contexto</p>
+          <span className="text-sm text-muted">
+            {summary.comparedCarsCount} coches · {summary.comparedTracksCount} circuitos · Fuente:{' '}
+            {filters.sourceSessionSetting}
+          </span>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Tipo de sesión
-            </span>
+        <div className="flex flex-wrap gap-2">
+          {modeOptions.map((option) => (
+            <Link
+              key={option.key}
+              href={buildHref(basePath, searchParams, { mode: option.key })}
+              className={cn(
+                'rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition',
+                option.key === mode
+                  ? 'border-[rgba(225,178,122,0.28)] bg-[rgba(225,178,122,0.12)] text-[#f0cca0]'
+                  : 'border-white/8 bg-white/[0.03] text-muted hover:text-white',
+              )}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="hairline-divider border-b px-5 py-3 sm:px-6">
+        <div className="grid gap-2 xl:grid-cols-[minmax(170px,1fr)_minmax(170px,1fr)_minmax(170px,1fr)_minmax(170px,1fr)_minmax(150px,0.9fr)_minmax(150px,0.9fr)]">
+          <label className="block">
             <select
-              name="sourceSessionSetting"
-              defaultValue={filters.sourceSessionSetting}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
+              value={sourceSessionSetting}
+              onChange={(event) => setSourceSessionSetting(event.target.value)}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
             >
               {options.sessionSettings.map((setting) => (
                 <option key={setting.id} value={setting.id}>
@@ -61,16 +239,23 @@ export function DashboardFilters({ filters, options }: DashboardFiltersProps) {
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Clase
-            </span>
+          <label className="block">
             <select
-              name="carClassId"
-              defaultValue={selectedClassId}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
+              value={carClassId}
+              onChange={(event) => {
+                const nextCarClassId = event.target.value;
+                const nextCarId = options.cars.some(
+                  (car) =>
+                    car.id === carId && (!nextCarClassId || car.carClassId === nextCarClassId),
+                )
+                  ? carId
+                  : '';
+                setCarClassId(nextCarClassId);
+                setCarId(nextCarId);
+              }}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
             >
-              <option value="">Todas</option>
+              <option value="">Clase</option>
               {options.carClasses.map((carClass) => (
                 <option key={carClass.id} value={carClass.id}>
                   {carClass.name}
@@ -79,34 +264,13 @@ export function DashboardFilters({ filters, options }: DashboardFiltersProps) {
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Coche
-            </span>
+          <label className="block">
             <select
-              name="carId"
-              defaultValue={selectedCarId}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
+              value={trackId}
+              onChange={(event) => setTrackId(event.target.value)}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
             >
-              <option value="">Todos</option>
-              {carsForSelectedClass.map((car) => (
-                <option key={car.id} value={car.id}>
-                  {car.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Circuito
-            </span>
-            <select
-              name="trackId"
-              defaultValue={selectedTrackId}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
-            >
-              <option value="">Todos</option>
+              <option value="">Circuito</option>
               {options.tracks.map((track) => (
                 <option key={track.id} value={track.id}>
                   {track.name}
@@ -115,31 +279,69 @@ export function DashboardFilters({ filters, options }: DashboardFiltersProps) {
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Desde
-            </span>
+          <label className="block">
+            <select
+              value={carId}
+              onChange={(event) => setCarId(event.target.value)}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
+            >
+              <option value="">Coche</option>
+              {carsForSelectedClass.map((car) => (
+                <option key={car.id} value={car.id}>
+                  {car.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
             <input
               type="date"
-              name="dateFrom"
-              defaultValue={filters.dateFrom ?? ''}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Hasta
-            </span>
+          <label className="block">
             <input
               type="date"
-              name="dateTo"
-              defaultValue={filters.dateTo ?? ''}
-              className="input-surface min-h-11 w-full rounded-[1rem] px-4 text-sm text-white outline-none"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="input-surface min-h-11 w-full rounded-[1.2rem] border-white/10 px-4 text-[15px] text-white outline-none"
             />
           </label>
         </div>
       </div>
-    </form>
+
+      <div className="px-5 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {activeFilters.length > 0 ? (
+            <>
+              {activeFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => clearSingleFilter(filter.key)}
+                  className="rounded-full border border-[rgba(225,178,122,0.26)] bg-[rgba(225,178,122,0.1)] px-3 py-1.5 text-sm text-[#f3dfc2]"
+                >
+                  {filter.label} ×
+                </button>
+              ))}
+              <Link
+                href={clearHref === basePath ? pathname : clearHref}
+                className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60"
+              >
+                Limpiar todo
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Ajusta el contexto y el dashboard se actualizará al instante.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

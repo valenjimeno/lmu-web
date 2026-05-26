@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { routes } from '@/lib/constants/routes';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { createTeam } from '@/services/team.service';
 
 function normalizeNullableText(value: FormDataEntryValue | null, maxLength: number) {
   const normalized = String(value ?? '').trim();
@@ -105,4 +106,45 @@ export async function completeRequiredProfileAction(formData: FormData) {
   revalidatePath(routes.profile);
   revalidatePath(routes.setups);
   redirect(returnTo);
+}
+
+export async function createTeamAction(formData: FormData) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(routes.login);
+  }
+
+  const teamName = normalizeNullableText(formData.get('teamName'), 80);
+
+  if (!teamName) {
+    redirect(`${routes.profile}?error=missing_team_name`);
+  }
+
+  try {
+    await createTeam({
+      userId: user.id,
+      name: teamName,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'team_creation_requires_pro') {
+        redirect(`${routes.profile}?error=team_creation_requires_pro`);
+      }
+
+      if (error.message === 'team_limit_reached') {
+        redirect(`${routes.profile}?error=team_limit_reached`);
+      }
+
+      if (error.message === 'team_slug_conflict') {
+        redirect(`${routes.profile}?error=team_slug_conflict`);
+      }
+    }
+
+    redirect(`${routes.profile}?error=create_team_failed`);
+  }
+
+  revalidatePath(routes.profile);
+  revalidatePath('/', 'layout');
+  redirect(`${routes.profile}?success=team_created`);
 }

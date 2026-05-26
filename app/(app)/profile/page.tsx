@@ -1,6 +1,7 @@
 import { ProfileCard } from '@/components/features/profile/profile-card';
 import { routes } from '@/lib/constants/routes';
 import { getAuthenticatedAppContext } from '@/services/profile.service';
+import { getUserTeams } from '@/services/team.service';
 import { redirect } from 'next/navigation';
 
 type ProfilePageProps = {
@@ -26,11 +27,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   }
 
   const { error, success } = await searchParams;
+  const teams = await getUserTeams(appContext.user.id);
 
   return (
     <section>
       <ProfileCard
         profile={appContext.profile}
+        entitlements={appContext.entitlements}
+        teams={teams}
         errorCode={resolveQueryParam(error)}
         successCode={resolveQueryParam(success)}
       />
