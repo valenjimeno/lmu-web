@@ -4,11 +4,16 @@ import { Button } from '@/components/ui/button';
 type LogoutButtonProps = {
   className?: string;
   iconOnly?: boolean;
+  fullWidth?: boolean;
 };
 
-export function LogoutButton({ className, iconOnly = false }: LogoutButtonProps) {
+export function LogoutButton({
+  className,
+  iconOnly = false,
+  fullWidth = false,
+}: LogoutButtonProps) {
   return (
-    <form action="/auth/signout" method="post">
+    <form action="/auth/signout" method="post" className={cn(fullWidth ? 'w-full' : undefined)}>
       <Button
         type="submit"
         variant="ghost"

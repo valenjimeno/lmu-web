@@ -3,14 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { appNavigationItems } from '@/lib/constants/routes';
+import { PilotMenu } from '@/components/shared/pilot-menu';
 import { cn } from '@/lib/utils/cn';
 
-export function Sidebar() {
+type SidebarProps = {
+  pilotName: string;
+};
+
+export function Sidebar({ pilotName }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="panel-dark hidden w-[10.5rem] shrink-0 overflow-hidden rounded-[1.35rem] lg:flex lg:flex-col">
-      <div className="flex h-full flex-col">
+    <aside className="panel-dark hidden w-[14rem] shrink-0 overflow-hidden rounded-[1.35rem] lg:flex lg:h-full lg:flex-col lg:self-stretch">
+      <div className="flex h-full min-h-0 flex-col">
         <div className="hairline-divider border-b px-4 py-4">
           <div className="logo-stack text-[1.7rem] text-white">
             <div>LMU</div>
@@ -18,7 +23,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        <div className="hairline-divider border-b px-3 py-4">
+        <div className="hairline-divider flex-1 overflow-y-auto border-b px-3 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Principal
           </p>
@@ -48,6 +53,10 @@ export function Sidebar() {
               );
             })}
           </nav>
+        </div>
+
+        <div className="mt-auto border-t border-white/8 bg-[rgba(8,10,14,0.92)] px-3 py-4 backdrop-blur-xl">
+          <PilotMenu pilotName={pilotName} className="w-full" align="right" side="top" />
         </div>
       </div>
     </aside>

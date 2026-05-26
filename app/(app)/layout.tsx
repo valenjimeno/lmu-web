@@ -29,13 +29,24 @@ async function AuthenticatedAppLayout({
     redirect(routes.login);
   }
 
+  const pilotName =
+    [appContext.profile?.firstName?.trim(), appContext.profile?.lastName?.trim()]
+      .filter(Boolean)
+      .join(' ') ||
+    appContext.preferredDriverName?.trim() ||
+    appContext.profile?.nickname?.trim() ||
+    appContext.user.email?.split('@')[0] ||
+    'Piloto';
+
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-5 lg:pb-6">
-        <Sidebar />
-        <div className="app-panel-strong flex min-h-[calc(100vh-2rem)] flex-1 flex-col rounded-[1.75rem] lg:rounded-[2rem]">
-          <Header />
-          <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:pb-7">{children}</div>
+    <div className="min-h-screen bg-transparent lg:p-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col gap-4 px-4 py-4 lg:h-[calc(100dvh-2rem)] lg:min-h-0 lg:flex-row lg:gap-5 lg:px-0 lg:py-0">
+        <Sidebar pilotName={pilotName} />
+        <div className="app-panel-strong flex min-h-[calc(100vh-2rem)] flex-1 flex-col overflow-hidden rounded-[1.75rem] lg:h-full lg:min-h-0 lg:rounded-[2rem]">
+          <Header pilotName={pilotName} />
+          <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:min-h-0 lg:overflow-y-auto lg:pb-7">
+            {children}
+          </div>
         </div>
       </div>
       {appContext.profileCompletion.isComplete ? null : (
@@ -47,14 +58,14 @@ async function AuthenticatedAppLayout({
 
 function AppShellSkeleton() {
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-5 lg:pb-6">
+    <div className="min-h-screen bg-transparent lg:p-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col gap-4 px-4 py-4 lg:h-[calc(100dvh-2rem)] lg:min-h-0 lg:flex-row lg:gap-5 lg:px-0 lg:py-0">
         <div className="panel-dark hidden min-h-[calc(100vh-2rem)] w-full max-w-[17rem] animate-pulse rounded-[1.75rem] bg-white/[0.04] lg:block" />
-        <div className="app-panel-strong flex min-h-[calc(100vh-2rem)] flex-1 flex-col rounded-[1.75rem] lg:rounded-[2rem]">
+        <div className="app-panel-strong flex min-h-[calc(100vh-2rem)] flex-1 flex-col overflow-hidden rounded-[1.75rem] lg:h-full lg:min-h-0 lg:rounded-[2rem]">
           <div className="border-b border-white/8 px-4 py-4 sm:px-6 md:px-7">
             <div className="h-10 w-48 animate-pulse rounded-full bg-white/10" />
           </div>
-          <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:pb-7">
+          <div className="flex-1 p-4 pb-7 sm:p-6 md:p-7 lg:min-h-0 lg:overflow-y-auto lg:pb-7">
             <div className="h-full min-h-64 animate-pulse rounded-[1.5rem] bg-white/[0.035]" />
           </div>
         </div>

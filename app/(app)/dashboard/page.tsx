@@ -34,7 +34,7 @@ const allowedMetrics = new Set<DashboardTrendMetric>([
 ]);
 
 const allowedRanges = new Set<DashboardTrendRange>(['10', '30', 'all']);
-const allowedModes = new Set<DashboardMode>(['global', 'contextual', 'compare']);
+const allowedModes = new Set<DashboardMode>(['global', 'contextual']);
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const [appContext, resolvedSearchParams] = await Promise.all([

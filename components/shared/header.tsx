@@ -2,12 +2,16 @@
 
 import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
-import { LogoutButton } from '@/components/features/auth/logout-button';
 import { AppNavigation } from '@/components/shared/app-navigation';
+import { PilotMenu } from '@/components/shared/pilot-menu';
 import { routes } from '@/lib/constants/routes';
 import { appNavigationItems } from '@/lib/constants/routes';
 
-export function Header() {
+type HeaderProps = {
+  pilotName: string;
+};
+
+export function Header({ pilotName }: HeaderProps) {
   const pathname = usePathname();
   const title = useMemo(() => {
     const matchedItem = appNavigationItems.find(
@@ -39,7 +43,7 @@ export function Header() {
           <div>
             <h1 className="text-xl font-semibold text-white sm:text-2xl">{title}</h1>
           </div>
-          <LogoutButton className="h-9 min-h-0 rounded-full border border-white/8 bg-white/[0.03] px-4 py-0 text-[11px] font-medium text-white/65 hover:border-[rgba(225,178,122,0.24)] hover:bg-[rgba(225,178,122,0.08)] hover:text-[#e1b27a]" />
+          <PilotMenu pilotName={pilotName} className="max-w-[15rem] lg:hidden" />
         </div>
 
         <AppNavigation

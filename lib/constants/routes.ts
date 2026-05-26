@@ -15,12 +15,6 @@ export const appNavigationItems = [
     icon: 'dashboard',
   },
   {
-    href: routes.profile,
-    label: 'Perfil',
-    title: 'Perfil',
-    icon: 'profile',
-  },
-  {
     href: routes.setups,
     label: 'Setups',
     title: 'Setups',

@@ -464,6 +464,16 @@ function average(values: Array<number | null | undefined>) {
   return definedValues.reduce((sum, value) => sum + value, 0) / definedValues.length;
 }
 
+function minimum(values: Array<number | null | undefined>) {
+  const definedValues = values.filter((value): value is number => typeof value === 'number');
+
+  if (definedValues.length === 0) {
+    return null;
+  }
+
+  return Math.min(...definedValues);
+}
+
 function roundTo(value: number | null, decimals: number) {
   if (value === null) {
     return null;
@@ -1634,33 +1644,26 @@ export async function getDriverOverviewData(
   };
   const contextDiagnostics = {
     pace: {
-      bestLapMs: (() => {
-        const bestLaps = filteredSessions
-          .map((item) => item.bestLapMs)
-          .filter((value): value is number => typeof value === 'number');
-        return bestLaps.length > 0 ? Math.min(...bestLaps) : null;
+      bestLapMs: minimum(filteredSessions.map((item) => item.bestLapMs)),
+      optimalLapMs: (() => {
+        const bestLap = minimum(filteredSessions.map((item) => item.bestLapMs));
+        const optimalLap = minimum(filteredSessions.map((item) => item.optimalLapMs));
+
+        if (bestLap === null || optimalLap === null) {
+          return optimalLap;
+        }
+
+        return Math.min(bestLap, optimalLap);
       })(),
-      optimalLapMs: roundTo(average(filteredSessions.map((item) => item.optimalLapMs)), 1),
       gapToOptimalMs: (() => {
-        const bestLap = filteredSessions
-          .map((item) => item.bestLapMs)
-          .filter((value): value is number => typeof value === 'number');
-        const optimal = filteredSessions
-          .map((item) => item.optimalLapMs)
-          .filter((value): value is number => typeof value === 'number');
+        const bestLap = minimum(filteredSessions.map((item) => item.bestLapMs));
+        const optimalLap = minimum(filteredSessions.map((item) => item.optimalLapMs));
 
-        if (bestLap.length === 0 || optimal.length === 0) {
+        if (bestLap === null || optimalLap === null) {
           return null;
         }
 
-        const averageBestLap = average(bestLap);
-        const averageOptimalLap = average(optimal);
-
-        if (averageBestLap === null || averageOptimalLap === null) {
-          return null;
-        }
-
-        return roundTo(averageBestLap - averageOptimalLap, 1);
+        return roundTo(Math.max(0, bestLap - optimalLap), 1);
       })(),
       bestThreeLapAverageMs: roundTo(
         average(filteredSessions.map((item) => item.bestThreeLapAverageMs)),
