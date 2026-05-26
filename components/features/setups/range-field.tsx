@@ -14,6 +14,7 @@ type RangeFieldProps = {
   decimals?: number;
   showRemainingToMax?: boolean;
   allowedValues?: number[];
+  showStepButtons?: boolean;
 };
 
 export function RangeField({
@@ -28,6 +29,7 @@ export function RangeField({
   decimals = 0,
   showRemainingToMax = false,
   allowedValues,
+  showStepButtons = false,
 }: RangeFieldProps) {
   const id = useId();
   const hasAllowedValues = Boolean(allowedValues?.length);
@@ -53,6 +55,23 @@ export function RangeField({
     : `${value.toFixed(decimals)}${valueSuffix}`;
   const displayedMin = allowedValueList ? allowedValueList[0] : min;
   const displayedMax = allowedValueList ? allowedValueList[allowedValueList.length - 1] : max;
+  const isAtMin = allowedValueList ? selectedIndex <= 0 : value <= min;
+  const isAtMax = allowedValueList ? selectedIndex >= allowedValueList.length - 1 : value >= max;
+
+  function nudgeValue(direction: -1 | 1) {
+    if (allowedValueList) {
+      const nextIndex = Math.min(
+        Math.max(selectedIndex + direction, 0),
+        Math.max(allowedValueList.length - 1, 0),
+      );
+      setSelectedIndex(nextIndex);
+      setValue(allowedValueList[nextIndex]);
+      return;
+    }
+
+    const nextValue = Math.min(max, Math.max(min, value + direction * step));
+    setValue(Number(nextValue.toFixed(decimals)));
+  }
 
   return (
     <label
@@ -63,9 +82,33 @@ export function RangeField({
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
           {label}
         </span>
-        <span className="min-w-14 rounded-[0.8rem] border border-white/10 bg-white/[0.04] px-3 py-1 text-center text-sm font-semibold text-foreground">
-          {displayValue}
-        </span>
+        <div className="flex items-center gap-2">
+          {showStepButtons ? (
+            <button
+              type="button"
+              onClick={() => nudgeValue(-1)}
+              disabled={isAtMin}
+              aria-label={`Reducir ${label}`}
+              className="flex h-9 w-9 items-center justify-center rounded-[0.8rem] border border-white/10 bg-white/[0.04] text-lg font-medium text-foreground transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              -
+            </button>
+          ) : null}
+          <span className="min-w-14 rounded-[0.8rem] border border-white/10 bg-white/[0.04] px-3 py-1 text-center text-sm font-semibold text-foreground">
+            {displayValue}
+          </span>
+          {showStepButtons ? (
+            <button
+              type="button"
+              onClick={() => nudgeValue(1)}
+              disabled={isAtMax}
+              aria-label={`Aumentar ${label}`}
+              className="flex h-9 w-9 items-center justify-center rounded-[0.8rem] border border-white/10 bg-white/[0.04] text-lg font-medium text-foreground transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              +
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="relative mt-4 px-1">
         <input name={name} type="hidden" value={value} />

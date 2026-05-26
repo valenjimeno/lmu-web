@@ -50,6 +50,9 @@ const selectClassName =
 const textareaClassName =
   'input-surface min-h-32 w-full rounded-[0.95rem] border-white/10 px-4 py-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
 
+const fieldCardClassName =
+  'block space-y-2 rounded-[1.1rem] border border-white/8 bg-white/[0.025] p-4';
+
 const errorMessages: Record<string, string> = {
   invalid_setup: 'Necesitamos un nombre valido, un tipo correcto y una visibilidad valida.',
   invalid_setup_values: 'Brake Bias, ABS y los controles de traccion deben ser numeros validos.',
@@ -219,11 +222,6 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                 )}
                 <input type="hidden" name="carId" value={setup.carId} />
                 <input type="hidden" name="trackId" value={setup.trackId} />
-                <input
-                  type="hidden"
-                  name="raceDurationMinutes"
-                  value={setup.raceDurationMinutes ?? ''}
-                />
                 <input type="hidden" name="weatherSummary" value={setup.weatherSummary ?? 'sun'} />
 
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -281,8 +279,42 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                       </select>
                     </label>
 
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foreground">Notas</span>
+                    <label className={fieldCardClassName}>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                        Minutos de carrera
+                      </span>
+                      <input
+                        type="number"
+                        name="raceDurationMinutes"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        defaultValue={setup.raceDurationMinutes ?? ''}
+                        placeholder="Ej. 45"
+                        className={selectClassName}
+                      />
+                    </label>
+
+                    <div className="space-y-2">
+                      <RangeField
+                        name="recommendedFuelPercent"
+                        label="Fuel recomendado"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={setup.recommendedFuelPercent ?? 50}
+                        defaultValue={50}
+                        valueSuffix="%"
+                      />
+                      <p className="text-xs text-muted">
+                        Guarda la carga recomendada para este setup entre 0 y 100%, en saltos de 5.
+                      </p>
+                    </div>
+
+                    <label className={fieldCardClassName}>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                        Notas
+                      </span>
                       <textarea
                         name="notes"
                         defaultValue={setup.notes ?? ''}
@@ -291,11 +323,16 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                       />
                     </label>
 
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foreground">Personal Best</span>
+                    <label className={fieldCardClassName}>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                        Personal Best
+                      </span>
                       <input
                         name="bestLap"
-                        inputMode="numeric"
+                        inputMode="text"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                         defaultValue={
                           setup.bestLapMs !== null ? formatLapTime(setup.bestLapMs) : ''
                         }
@@ -341,6 +378,7 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                     decimals={1}
                     showRemainingToMax
                     allowedValues={buildBrakeBiasValues()}
+                    showStepButtons
                   />
                   <RangeField name="abs" label="ABS" min={0} max={9} value={setup.abs ?? 5} />
                   <RangeField
@@ -442,6 +480,15 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                     label="TC SLIP ANGLE"
                     value={formatMetricValue(setup.tcSlipAngle)}
                     className="sm:col-span-2 xl:col-span-2"
+                  />
+                  <SetupMetricCard
+                    label="FUEL RECOMENDADO"
+                    value={
+                      setup.recommendedFuelPercent !== null
+                        ? `${setup.recommendedFuelPercent}%`
+                        : 'No definido'
+                    }
+                    className="sm:col-span-2 xl:col-span-1"
                   />
                 </dl>
               </section>

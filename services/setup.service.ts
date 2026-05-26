@@ -19,6 +19,7 @@ type SetupRow = Pick<
   | 'notes'
   | 'race_duration_minutes'
   | 'weather_summary'
+  | 'fuel_data'
   | 'brake_bias'
   | 'abs'
   | 'tc'
@@ -46,6 +47,7 @@ export type SetupSummary = {
   notes: string | null;
   raceDurationMinutes: number | null;
   weatherSummary: string | null;
+  recommendedFuelPercent: number | null;
   brakeBias: number | null;
   abs: number | null;
   onboardTc: number | null;
@@ -53,6 +55,49 @@ export type SetupSummary = {
   tcSlipAngle: number | null;
   bestLapMs: number | null;
 };
+
+type SetupFuelData = Database['public']['Tables']['setups']['Row']['fuel_data'];
+
+function extractRecommendedFuelPercent(fuelData: SetupFuelData | null | undefined) {
+  if (!fuelData || typeof fuelData !== 'object' || Array.isArray(fuelData)) {
+    return null;
+  }
+
+  const candidate = fuelData as Record<string, unknown>;
+  const rawValue =
+    candidate.recommended_fuel_percent ??
+    candidate.recommendedFuelPercent ??
+    candidate.recommended_fuel ??
+    candidate.recommendedFuel;
+
+  if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) {
+    return null;
+  }
+
+  if (rawValue < 0 || rawValue > 100) {
+    return null;
+  }
+
+  return rawValue;
+}
+
+function mergeRecommendedFuelIntoFuelData(
+  currentFuelData: SetupFuelData | null | undefined,
+  recommendedFuelPercent: number | null | undefined,
+): SetupFuelData {
+  const nextFuelData: Record<string, unknown> =
+    currentFuelData && typeof currentFuelData === 'object' && !Array.isArray(currentFuelData)
+      ? { ...(currentFuelData as Record<string, unknown>) }
+      : {};
+
+  if (recommendedFuelPercent === null || recommendedFuelPercent === undefined) {
+    delete nextFuelData.recommended_fuel_percent;
+  } else {
+    nextFuelData.recommended_fuel_percent = recommendedFuelPercent;
+  }
+
+  return nextFuelData as SetupFuelData;
+}
 
 export type SetupFilters = {
   query?: string;
@@ -138,6 +183,7 @@ function buildSetupSummary(
     notes: setup.notes,
     raceDurationMinutes: setup.race_duration_minutes,
     weatherSummary: setup.weather_summary,
+    recommendedFuelPercent: extractRecommendedFuelPercent(setup.fuel_data),
     brakeBias: setup.brake_bias,
     abs: setup.abs,
     onboardTc: setup.tc,
@@ -183,7 +229,7 @@ export async function getSetupPageData(
   let setupsQuery = supabase
     .from('setups')
     .select(
-      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       { count: 'exact' },
     )
     .eq('owner_user_id', userId);
@@ -328,7 +374,7 @@ export async function getSetupComparisonData(userId: string, filters: SetupCompa
   let setupsQuery = supabase
     .from('setups')
     .select(
-      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
     )
     .eq('owner_user_id', userId)
     .not('best_lap_ms', 'is', null);
@@ -414,7 +460,7 @@ export async function getSetupDetail(userId: string, setupId: string) {
     supabase
       .from('setups')
       .select(
-        'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+        'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       )
       .eq('owner_user_id', userId)
       .eq('id', setupId)
@@ -475,6 +521,7 @@ type CreateSetupInput = {
   notes?: string;
   raceDurationMinutes?: number | null;
   weatherSummary?: string | null;
+  recommendedFuelPercent?: number | null;
   brakeBias?: number | null;
   abs?: number | null;
   onboardTc?: number | null;
@@ -494,6 +541,7 @@ type UpdateSetupInput = {
   notes?: string;
   raceDurationMinutes?: number | null;
   weatherSummary?: string | null;
+  recommendedFuelPercent?: number | null;
   brakeBias?: number | null;
   abs?: number | null;
   onboardTc?: number | null;
@@ -522,6 +570,7 @@ export async function createSetup(input: CreateSetupInput) {
       notes: input.notes ? input.notes : null,
       race_duration_minutes: input.raceDurationMinutes ?? null,
       weather_summary: input.weatherSummary ? input.weatherSummary : null,
+      fuel_data: mergeRecommendedFuelIntoFuelData(null, input.recommendedFuelPercent),
       brake_bias: input.brakeBias ?? null,
       abs: input.abs ?? null,
       tc: input.onboardTc ?? null,
@@ -542,6 +591,17 @@ export async function createSetup(input: CreateSetupInput) {
 export async function updateSetup(input: UpdateSetupInput) {
   const supabase = await createClient();
 
+  const currentFuelDataResult = await supabase
+    .from('setups')
+    .select('fuel_data')
+    .eq('id', input.setupId)
+    .eq('owner_user_id', input.ownerUserId)
+    .maybeSingle();
+
+  if (currentFuelDataResult.error) {
+    throw currentFuelDataResult.error;
+  }
+
   const { error } = await supabase
     .from('setups')
     .update({
@@ -553,6 +613,10 @@ export async function updateSetup(input: UpdateSetupInput) {
       notes: input.notes ? input.notes : null,
       race_duration_minutes: input.raceDurationMinutes ?? null,
       weather_summary: input.weatherSummary ? input.weatherSummary : null,
+      fuel_data: mergeRecommendedFuelIntoFuelData(
+        currentFuelDataResult.data?.fuel_data,
+        input.recommendedFuelPercent,
+      ),
       brake_bias: input.brakeBias ?? null,
       abs: input.abs ?? null,
       tc: input.onboardTc ?? null,

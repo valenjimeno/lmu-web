@@ -52,6 +52,7 @@ type SetupFormModalProps = {
     visibility?: SetupSummary['visibility'];
     notes?: string | null;
     raceDurationMinutes?: number | null;
+    recommendedFuelPercent?: number | null;
     weatherSummary?: string | null;
     brakeBias?: number | null;
     abs?: number | null;
@@ -89,6 +90,9 @@ const textareaClassName =
 
 const inputClassName =
   'input-surface w-full rounded-[1.25rem] px-4 py-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(241,196,135,0.28)] focus:ring-2 focus:ring-[rgba(241,196,135,0.16)]';
+
+const fieldCardClassName =
+  'block space-y-2 rounded-[1.1rem] border border-white/8 bg-white/[0.025] p-4';
 
 const weatherOptions: Array<{ value: WeatherValue; label: string }> = [
   { value: 'sun', label: 'Sol' },
@@ -393,8 +397,10 @@ function SetupFormModal({
                 </div>
               </fieldset>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-foreground">Minutos de carrera</span>
+              <label className={fieldCardClassName}>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Minutos de carrera
+                </span>
                 <input
                   type="number"
                   name="raceDurationMinutes"
@@ -410,8 +416,26 @@ function SetupFormModal({
                 </p>
               </label>
 
-              <fieldset className="space-y-3">
-                <legend className="text-sm font-medium text-foreground">Clima</legend>
+              <div className="space-y-2">
+                <RangeField
+                  name="recommendedFuelPercent"
+                  label="Fuel recomendado"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={defaultValues?.recommendedFuelPercent ?? 50}
+                  defaultValue={50}
+                  valueSuffix="%"
+                />
+                <p className="text-xs text-muted">
+                  Guarda la carga recomendada para este setup entre 0 y 100%, en saltos de 5.
+                </p>
+              </div>
+
+              <fieldset className={fieldCardClassName}>
+                <legend className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Clima
+                </legend>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {weatherOptions.map((option) => {
                     const isSelected = selectedWeatherSummary === option.value;
@@ -443,8 +467,10 @@ function SetupFormModal({
                 </div>
               </fieldset>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-foreground">Notas</span>
+              <label className={fieldCardClassName}>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Notas
+                </span>
                 <textarea
                   name="notes"
                   defaultValue={defaultValues?.notes ?? ''}
@@ -453,11 +479,16 @@ function SetupFormModal({
                 />
               </label>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-foreground">Personal Best</span>
+              <label className={fieldCardClassName}>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Personal Best
+                </span>
                 <input
                   name="bestLap"
-                  inputMode="numeric"
+                  inputMode="text"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   defaultValue={
                     defaultValues?.bestLapMs !== null && defaultValues?.bestLapMs !== undefined
                       ? formatLapTime(defaultValues.bestLapMs)
@@ -482,6 +513,7 @@ function SetupFormModal({
                   decimals={1}
                   showRemainingToMax
                   allowedValues={buildBrakeBiasValues()}
+                  showStepButtons
                 />
                 <RangeField
                   name="abs"
@@ -636,6 +668,7 @@ export function EditSetupModal({
         visibility: setup.visibility,
         notes: setup.notes,
         raceDurationMinutes: setup.raceDurationMinutes,
+        recommendedFuelPercent: setup.recommendedFuelPercent,
         weatherSummary: setup.weatherSummary,
         brakeBias: setup.brakeBias,
         abs: setup.abs,

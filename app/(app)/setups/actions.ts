@@ -37,6 +37,20 @@ function parseNullableNumber(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+function parseNullablePercentage(value: FormDataEntryValue | null) {
+  const parsed = parseNullableNumber(value);
+
+  if (parsed === 'invalid' || parsed === null) {
+    return parsed;
+  }
+
+  if (parsed < 0 || parsed > 100) {
+    return 'invalid';
+  }
+
+  return parsed;
+}
+
 function parseNullablePositiveInteger(value: FormDataEntryValue | null) {
   const normalized = String(value ?? '').trim();
 
@@ -125,6 +139,7 @@ export async function createSetupAction(formData: FormData) {
   const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
+  const recommendedFuelPercent = parseNullablePercentage(formData.get('recommendedFuelPercent'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
   const abs = parseNullableNumber(formData.get('abs'));
   const onboardTc = parseNullableNumber(formData.get('onboardTc'));
@@ -148,6 +163,7 @@ export async function createSetupAction(formData: FormData) {
 
   if (
     raceDurationMinutes === 'invalid' ||
+    recommendedFuelPercent === 'invalid' ||
     brakeBias === 'invalid' ||
     abs === 'invalid' ||
     onboardTc === 'invalid' ||
@@ -169,6 +185,7 @@ export async function createSetupAction(formData: FormData) {
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
+      recommendedFuelPercent,
       brakeBias,
       abs,
       onboardTc,
@@ -201,6 +218,7 @@ export async function updateSetupAction(formData: FormData) {
   const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
+  const recommendedFuelPercent = parseNullablePercentage(formData.get('recommendedFuelPercent'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
   const abs = parseNullableNumber(formData.get('abs'));
   const onboardTc = parseNullableNumber(formData.get('onboardTc'));
@@ -222,6 +240,7 @@ export async function updateSetupAction(formData: FormData) {
 
   if (
     raceDurationMinutes === 'invalid' ||
+    recommendedFuelPercent === 'invalid' ||
     brakeBias === 'invalid' ||
     abs === 'invalid' ||
     onboardTc === 'invalid' ||
@@ -244,6 +263,7 @@ export async function updateSetupAction(formData: FormData) {
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
+      recommendedFuelPercent,
       brakeBias,
       abs,
       onboardTc,
@@ -279,6 +299,7 @@ export async function duplicateSetupAction(formData: FormData) {
   const rawVisibility = String(formData.get('visibility') ?? 'private').trim();
   const rawWeatherSummary = String(formData.get('weatherSummary') ?? 'sun').trim();
   const raceDurationMinutes = parseNullablePositiveInteger(formData.get('raceDurationMinutes'));
+  const recommendedFuelPercent = parseNullablePercentage(formData.get('recommendedFuelPercent'));
   const brakeBias = parseNullableNumber(formData.get('brakeBias'));
   const abs = parseNullableNumber(formData.get('abs'));
   const onboardTc = parseNullableNumber(formData.get('onboardTc'));
@@ -306,6 +327,7 @@ export async function duplicateSetupAction(formData: FormData) {
 
   if (
     raceDurationMinutes === 'invalid' ||
+    recommendedFuelPercent === 'invalid' ||
     brakeBias === 'invalid' ||
     abs === 'invalid' ||
     onboardTc === 'invalid' ||
@@ -333,6 +355,7 @@ export async function duplicateSetupAction(formData: FormData) {
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
+      recommendedFuelPercent,
       brakeBias,
       abs,
       onboardTc,
