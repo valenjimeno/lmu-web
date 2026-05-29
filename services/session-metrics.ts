@@ -100,6 +100,19 @@ function calculateRollingAverage(values: number[], windowSize: number, mode: 'be
   return mode === 'best' ? Math.min(...windowAverages) : windowAverages[windowAverages.length - 1];
 }
 
+function calculateOpeningStintAverage(values: number[], windowSize: number) {
+  if (values.length < windowSize) {
+    return null;
+  }
+
+  // Ignore the first valid lap when there is enough sample, since it is often
+  // skewed by start traffic, tire warmup, or stint settling.
+  const openingWindow =
+    values.length >= windowSize + 1 ? values.slice(1, windowSize + 1) : values.slice(0, windowSize);
+
+  return average(openingWindow);
+}
+
 function calculateValidLapRate(laps: SessionMetricsLapInput[]) {
   const timedLaps = laps.filter((lap) => !lap.pitFlag && lap.lapTimeSeconds !== null);
 
@@ -331,7 +344,7 @@ export function deriveSessionMetrics(
   const optimalLapMs = calculateOptimalLapMs(laps);
   const bestThreeLapAverageMs = calculateRollingAverage(lapTimesMs, 3, 'best');
   const lastThreeLapAverageMs = calculateRollingAverage(lapTimesMs, 3, 'last');
-  const firstThreeLapAverageMs = lapTimesMs.length >= 3 ? average(lapTimesMs.slice(0, 3)) : null;
+  const firstThreeLapAverageMs = calculateOpeningStintAverage(lapTimesMs, 3);
   const paceFadeMs =
     firstThreeLapAverageMs !== null && lastThreeLapAverageMs !== null
       ? lastThreeLapAverageMs - firstThreeLapAverageMs

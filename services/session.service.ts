@@ -107,6 +107,8 @@ type SetupSessionLapRow = Pick<
   | 'top_speed_kph'
   | 'fuel_remaining'
   | 'fuel_used'
+  | 'virtual_energy_remaining'
+  | 'virtual_energy_used'
   | 'tire_wear_fl'
   | 'tire_wear_fr'
   | 'tire_wear_rl'
@@ -205,8 +207,16 @@ export type SessionDetail = SessionSummary & {
   paceFadeMs: number | null;
   validLapRate: number | null;
   averageFuelUsedPerLap: number | null;
+  averageVirtualEnergyUsedPerLap: number | null;
   fuelMinPerLap: number | null;
   fuelMaxPerLap: number | null;
+  virtualEnergyMinPerLap: number | null;
+  virtualEnergyMaxPerLap: number | null;
+  virtualEnergyStart: number | null;
+  virtualEnergyEnd: number | null;
+  projectedVirtualEnergy20Minutes: number | null;
+  projectedVirtualEnergy30Minutes: number | null;
+  projectedVirtualEnergy45Minutes: number | null;
   projectedFuel20Minutes: number | null;
   projectedFuel30Minutes: number | null;
   projectedFuel45Minutes: number | null;
@@ -233,6 +243,8 @@ export type SessionDetail = SessionSummary & {
     topSpeedKph: number | null;
     fuelRemaining: number | null;
     fuelUsed: number | null;
+    virtualEnergyRemaining: number | null;
+    virtualEnergyUsed: number | null;
     tireWearFl: number | null;
     tireWearFr: number | null;
     tireWearRl: number | null;
@@ -277,6 +289,25 @@ function resolveSessionCatalogFilters(
     carsForSelectedClass,
     selectedCarId,
   };
+}
+
+function calculateConsumptionProjection(
+  averageConsumptionPerLap: number | null,
+  averageLapMs: number | null,
+  minutes: number,
+) {
+  if (
+    averageConsumptionPerLap === null ||
+    averageConsumptionPerLap <= 0 ||
+    averageLapMs === null ||
+    averageLapMs <= 0 ||
+    minutes <= 0
+  ) {
+    return null;
+  }
+
+  const projectedLapCount = (minutes * 60 * 1000) / averageLapMs;
+  return Math.round(averageConsumptionPerLap * projectedLapCount * 10000) / 10000;
 }
 
 function buildSessionSummary(
@@ -391,7 +422,13 @@ function buildTextCandidates(...values: Array<string | null | undefined>) {
   const candidates = new Set<string>();
 
   for (const value of values) {
+    const rawValue = value?.trim().toLocaleLowerCase() ?? '';
     const normalizedValue = normalizeText(value);
+
+    if (rawValue) {
+      candidates.add(rawValue);
+      candidates.add(rawValue.replace(/\s+/g, ''));
+    }
 
     if (!normalizedValue) {
       continue;
@@ -399,6 +436,82 @@ function buildTextCandidates(...values: Array<string | null | undefined>) {
 
     candidates.add(normalizedValue);
     candidates.add(normalizeCompactText(value));
+  }
+
+  return Array.from(candidates);
+}
+
+function buildTrackCandidates(...values: Array<string | null | undefined>) {
+  const genericTrackTokens = new Set([
+    'autodromo',
+    'autodrome',
+    'circuit',
+    'de',
+    'di',
+    'do',
+    'international',
+    'motor',
+    'park',
+    'road',
+    'speedway',
+    'the',
+    'track',
+  ]);
+  const candidates = new Set(buildTextCandidates(...values));
+
+  for (const value of values) {
+    const normalizedValue = normalizeText(value);
+
+    if (!normalizedValue) {
+      continue;
+    }
+
+    const tokens = normalizedValue
+      .split(' ')
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3 && !genericTrackTokens.has(token));
+
+    for (const token of tokens) {
+      candidates.add(token);
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+function buildCarCandidates(...values: Array<string | null | undefined>) {
+  const genericCarTokens = new Set([
+    'auto',
+    'car',
+    'cars',
+    'competition',
+    'evo',
+    'gt3',
+    'gtp',
+    'hypercar',
+    'lmdh',
+    'lmgt3',
+    'prototype',
+    'racing',
+    'team',
+  ]);
+  const candidates = new Set(buildTextCandidates(...values));
+
+  for (const value of values) {
+    const normalizedValue = normalizeText(value);
+
+    if (!normalizedValue) {
+      continue;
+    }
+
+    const tokens = normalizedValue
+      .split(' ')
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3 && !genericCarTokens.has(token));
+
+    for (const token of tokens) {
+      candidates.add(token);
+    }
   }
 
   return Array.from(candidates);
@@ -593,12 +706,12 @@ export async function getSessionPageData(
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
   );
   const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
-  const selectedCarCandidates = buildTextCandidates(
+  const selectedCarCandidates = buildCarCandidates(
     selectedCar?.name,
     selectedCar?.slug,
     selectedCarName,
   );
-  const selectedTrackCandidates = buildTextCandidates(
+  const selectedTrackCandidates = buildTrackCandidates(
     selectedTrack?.name,
     selectedTrack?.slug,
     selectedTrack?.official_name,
@@ -824,7 +937,7 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     supabase
       .from('setup_session_laps')
       .select(
-        'lap_number, running_position, lap_time_seconds, sector_1_seconds, sector_2_seconds, sector_3_seconds, top_speed_kph, fuel_remaining, fuel_used, tire_wear_fl, tire_wear_fr, tire_wear_rl, tire_wear_rr, front_compound, rear_compound, pit_flag, is_valid_lap',
+        'lap_number, running_position, lap_time_seconds, sector_1_seconds, sector_2_seconds, sector_3_seconds, top_speed_kph, fuel_remaining, fuel_used, virtual_energy_remaining, virtual_energy_used, tire_wear_fl, tire_wear_fr, tire_wear_rl, tire_wear_rr, front_compound, rear_compound, pit_flag, is_valid_lap',
       )
       .eq('session_id', sessionId)
       .order('lap_number', { ascending: true }),
@@ -858,6 +971,23 @@ export async function getSessionDetail(userId: string, sessionId: string) {
   const validLaps = laps.filter(
     (lap) => lap.is_valid_lap && !lap.pit_flag && lap.lap_time_seconds !== null,
   );
+  const virtualEnergyValues = validLaps
+    .map((lap) => lap.virtual_energy_used)
+    .filter((value): value is number => typeof value === 'number' && value > 0);
+  const averageVirtualEnergyUsedPerLap =
+    virtualEnergyValues.length > 0
+      ? Math.round(
+          (virtualEnergyValues.reduce((sum, value) => sum + value, 0) /
+            virtualEnergyValues.length) *
+            10000,
+        ) / 10000
+      : null;
+  const firstLapWithVirtualEnergy = laps.find(
+    (lap) => typeof lap.virtual_energy_remaining === 'number',
+  );
+  const lastLapWithVirtualEnergy = [...laps]
+    .reverse()
+    .find((lap) => typeof lap.virtual_energy_remaining === 'number');
   const derivedMetrics = deriveSessionMetrics(
     laps.map((lap) => ({
       lapTimeSeconds: lap.lap_time_seconds,
@@ -915,8 +1045,30 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     validLapRate: session.valid_lap_rate ?? derivedMetrics.validLapRate,
     averageFuelUsedPerLap:
       session.average_fuel_used_per_lap ?? derivedMetrics.averageFuelUsedPerLap,
+    averageVirtualEnergyUsedPerLap,
     fuelMinPerLap: session.fuel_min_per_lap ?? derivedMetrics.fuelMinPerLap,
     fuelMaxPerLap: session.fuel_max_per_lap ?? derivedMetrics.fuelMaxPerLap,
+    virtualEnergyMinPerLap:
+      virtualEnergyValues.length > 0 ? Math.min(...virtualEnergyValues) : null,
+    virtualEnergyMaxPerLap:
+      virtualEnergyValues.length > 0 ? Math.max(...virtualEnergyValues) : null,
+    virtualEnergyStart: firstLapWithVirtualEnergy?.virtual_energy_remaining ?? null,
+    virtualEnergyEnd: lastLapWithVirtualEnergy?.virtual_energy_remaining ?? null,
+    projectedVirtualEnergy20Minutes: calculateConsumptionProjection(
+      averageVirtualEnergyUsedPerLap,
+      session.average_lap_ms ?? derivedMetrics.averageLapMs,
+      20,
+    ),
+    projectedVirtualEnergy30Minutes: calculateConsumptionProjection(
+      averageVirtualEnergyUsedPerLap,
+      session.average_lap_ms ?? derivedMetrics.averageLapMs,
+      30,
+    ),
+    projectedVirtualEnergy45Minutes: calculateConsumptionProjection(
+      averageVirtualEnergyUsedPerLap,
+      session.average_lap_ms ?? derivedMetrics.averageLapMs,
+      45,
+    ),
     projectedFuel20Minutes:
       session.projected_fuel_20_minutes ?? derivedMetrics.projectedFuel20Minutes,
     projectedFuel30Minutes:
@@ -950,6 +1102,8 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       topSpeedKph: lap.top_speed_kph,
       fuelRemaining: lap.fuel_remaining,
       fuelUsed: lap.fuel_used,
+      virtualEnergyRemaining: lap.virtual_energy_remaining,
+      virtualEnergyUsed: lap.virtual_energy_used,
       tireWearFl: lap.tire_wear_fl,
       tireWearFr: lap.tire_wear_fr,
       tireWearRl: lap.tire_wear_rl,

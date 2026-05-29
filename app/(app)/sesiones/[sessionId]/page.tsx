@@ -47,6 +47,14 @@ function formatPercentage(value: number | null, decimals = 0) {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
+function formatPercentageRange(minValue: number | null, maxValue: number | null, decimals = 1) {
+  if (minValue === null || maxValue === null) {
+    return 'No definida';
+  }
+
+  return `${formatPercentage(minValue, decimals)} - ${formatPercentage(maxValue, decimals)}`;
+}
+
 function formatLapDelta(value: number | null) {
   if (value === null) {
     return 'No definido';
@@ -92,6 +100,41 @@ function SessionMetricCard({
         {value}
       </p>
       <p className="mt-2 text-xs text-white/48">{helpText}</p>
+    </div>
+  );
+}
+
+function SessionPositionCard({
+  finishPos,
+  gridPos,
+  positionGain,
+}: {
+  finishPos: number | null;
+  gridPos: number | null;
+  positionGain: number | null;
+}) {
+  const gainTone =
+    positionGain === null
+      ? 'text-white/58'
+      : positionGain > 0
+        ? 'text-emerald-300'
+        : positionGain < 0
+          ? 'text-[#f3b4aa]'
+          : 'text-white/78';
+
+  return (
+    <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] px-4 py-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Posicion</p>
+      <div className="mt-3 flex items-end justify-between gap-4">
+        <p className="text-[1.85rem] leading-none font-medium text-white">
+          {finishPos ?? 'No definida'}
+        </p>
+        <p className={`text-sm font-semibold ${gainTone}`}>{formatPositionDelta(positionGain)}</p>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-4 text-xs text-white/48">
+        <span>Salida P{gridPos ?? 'ND'}</span>
+        <span>Resultado final</span>
+      </div>
     </div>
   );
 }
@@ -142,15 +185,27 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
         : session.positionGain < 0
           ? 'text-[#f3b4aa]'
           : 'text-white/78';
-  const paceFadeTone =
-    session.paceFadeMs === null
-      ? 'text-white'
-      : session.paceFadeMs > 0
-        ? 'text-[#f3b4aa]'
-        : session.paceFadeMs < 0
-          ? 'text-emerald-300'
-          : 'text-white';
+  const bestSector1Ms = session.laps.reduce<number | null>((best, lap) => {
+    if (lap.sector1Ms === null || lap.sector1Ms <= 0) {
+      return best;
+    }
 
+    return best === null ? lap.sector1Ms : Math.min(best, lap.sector1Ms);
+  }, null);
+  const bestSector2Ms = session.laps.reduce<number | null>((best, lap) => {
+    if (lap.sector2Ms === null || lap.sector2Ms <= 0) {
+      return best;
+    }
+
+    return best === null ? lap.sector2Ms : Math.min(best, lap.sector2Ms);
+  }, null);
+  const bestSector3Ms = session.laps.reduce<number | null>((best, lap) => {
+    if (lap.sector3Ms === null || lap.sector3Ms <= 0) {
+      return best;
+    }
+
+    return best === null ? lap.sector3Ms : Math.min(best, lap.sector3Ms);
+  }, null);
   return (
     <section className="space-y-6">
       <div className="panel-dark rounded-[1.75rem] p-5 sm:p-6">
@@ -164,13 +219,34 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                 {session.name}
               </h2>
               <p className="text-sm leading-7 text-muted">
-                {session.driverName} · {session.carName} · {session.trackName}
+                {session.driverName} ·{' '}
+                {session.sourceCarClass ?? session.carClassId ?? 'Clase no definida'} ·{' '}
+                {session.carName} · {session.trackName}
               </p>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <SessionMetricCard
-                  label="Posición"
-                  value={String(session.finishPos ?? 'No definida')}
-                  helpText="Resultado final de la sesión."
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.12)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f0cca0]">
+                  {formatSessionType(session.sessionType)}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                  {formatRaceDurationMinutes(session.raceDurationMinutes)}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                  {session.sessionDateTime
+                    ? formatDate(session.sessionDateTime)
+                    : 'Fecha no definida'}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                  {session.lapsCompleted ?? 'ND'} vueltas
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                  {session.finishStatus ?? 'Estado no definido'}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <SessionPositionCard
+                  finishPos={session.finishPos}
+                  gridPos={session.gridPos}
+                  positionGain={session.positionGain}
                 />
                 <SessionMetricCard
                   label="Mejor vuelta"
@@ -186,12 +262,6 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                   label="Ritmo medio"
                   value={formatLapTime(session.averageLapMs)}
                   helpText="Promedio de vueltas válidas fuera de pit."
-                />
-                <SessionMetricCard
-                  label="Caída de ritmo"
-                  value={formatLapDelta(session.paceFadeMs)}
-                  helpText="Diferencia entre el cierre y el arranque del stint."
-                  tone={paceFadeTone}
                 />
               </div>
             </div>
@@ -219,93 +289,62 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
               </p>
               <h3 className="text-2xl font-semibold tracking-tight text-white">Resumen completo</h3>
             </div>
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
-                <div className="space-y-3">
+            <div className="mt-6 rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
+              <div className="space-y-3">
+                <SessionDataLine label="Vueltas validas" value={String(session.validLapCount)} />
+                <SessionDataLine
+                  label="Velocidad maxima"
+                  value={formatNumber(session.peakTopSpeedKph, ' km/h')}
+                />
+                <SessionDataLine
+                  label="3 mejores vueltas"
+                  value={formatLapTime(session.bestThreeLapAverageMs)}
+                />
+                <SessionDataLine
+                  label="Últimas 3 vueltas"
+                  value={formatLapTime(session.lastThreeLapAverageMs)}
+                />
+                <SessionDataLine
+                  label="Ratio válidas"
+                  value={formatPercentage(session.validLapRate)}
+                />
+                <SessionDataLine
+                  label="Consumo/vuelta"
+                  value={formatPercentage(session.averageFuelUsedPerLap, 1)}
+                />
+                <SessionDataLine
+                  label="VE inicial"
+                  value={formatPercentage(session.virtualEnergyStart, 1)}
+                />
+                <SessionDataLine
+                  label="VE media/vuelta"
+                  value={formatPercentage(session.averageVirtualEnergyUsedPerLap, 1)}
+                />
+                <SessionDataLine
+                  label="VE final"
+                  value={formatPercentage(session.virtualEnergyEnd, 1)}
+                />
+                <SessionDataLine
+                  label="Desgaste delantero"
+                  value={formatPercentage(session.tireDropFront, 1)}
+                />
+                <SessionDataLine
+                  label="Desgaste trasero"
+                  value={formatPercentage(session.tireDropRear, 1)}
+                />
+                <SessionDataLine
+                  label="Tiempo final"
+                  value={formatSessionDuration(session.finishTimeSeconds)}
+                />
+                {session.pitstops !== 0 ? (
                   <SessionDataLine
-                    label="Salida"
-                    value={String(session.gridPos ?? 'No definido')}
+                    label="Pitstops"
+                    value={String(session.pitstops ?? 'No definido')}
                   />
-                  <SessionDataLine
-                    label="Posiciones ganadas"
-                    value={formatPositionDelta(session.positionGain)}
-                    tone={positionDeltaTone}
-                  />
-                  <SessionDataLine
-                    label="Vueltas"
-                    value={String(session.lapsCompleted ?? 'No definido')}
-                  />
-                  {session.pitstops !== 0 ? (
-                    <SessionDataLine
-                      label="Pitstops"
-                      value={String(session.pitstops ?? 'No definido')}
-                    />
-                  ) : null}
-                  <SessionDataLine label="Estado" value={session.finishStatus ?? 'No definido'} />
-                </div>
-              </div>
-              <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
-                <div className="space-y-3">
-                  <SessionDataLine label="Válidas" value={String(session.validLapCount)} />
-                  <SessionDataLine
-                    label="Pico velocidad"
-                    value={formatNumber(session.peakTopSpeedKph, ' km/h')}
-                  />
-                  <SessionDataLine
-                    label="3 mejores vueltas"
-                    value={formatLapTime(session.bestThreeLapAverageMs)}
-                  />
-                  <SessionDataLine
-                    label="Últimas 3 vueltas"
-                    value={formatLapTime(session.lastThreeLapAverageMs)}
-                  />
-                  <SessionDataLine
-                    label="Ratio válidas"
-                    value={formatPercentage(session.validLapRate)}
-                  />
-                  <SessionDataLine
-                    label="Consumo/vuelta"
-                    value={formatNumber(session.averageFuelUsedPerLap, '', 3)}
-                  />
-                  <SessionDataLine
-                    label="Caída delantera"
-                    value={formatNumber(session.tireDropFront, '', 3)}
-                  />
-                  <SessionDataLine
-                    label="Caída trasera"
-                    value={formatNumber(session.tireDropRear, '', 3)}
-                  />
-                  <SessionDataLine
-                    label="Tiempo final"
-                    value={formatSessionDuration(session.finishTimeSeconds)}
-                  />
-                </div>
+                ) : null}
               </div>
             </div>
           </section>
-
-          {session.insights.length > 0 ? (
-            <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
-                  Insights
-                </p>
-                <h3 className="text-2xl font-semibold tracking-tight text-white">
-                  Lectura del stint
-                </h3>
-              </div>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {session.insights.map((insight) => (
-                  <div
-                    key={insight}
-                    className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-white/78"
-                  >
-                    {insight}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
 
           <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
             <div className="space-y-2">
@@ -338,11 +377,43 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                       <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
                         Tiempo
                       </p>
-                      <p className="text-sm text-white">{formatLapTime(lap.lapTimeMs)}</p>
+                      <p
+                        className={
+                          lap.lapTimeMs !== null && lap.lapTimeMs === session.bestLapMs
+                            ? 'text-sm font-semibold text-emerald-300'
+                            : 'text-sm text-white'
+                        }
+                      >
+                        {formatLapTime(lap.lapTimeMs)}
+                      </p>
                       <div className="mt-1 space-y-0.5 text-xs text-white/45">
-                        <p>S1 {formatLapTime(lap.sector1Ms)}</p>
-                        <p>S2 {formatLapTime(lap.sector2Ms)}</p>
-                        <p>S3 {formatLapTime(lap.sector3Ms)}</p>
+                        <p
+                          className={
+                            lap.sector1Ms !== null && lap.sector1Ms === bestSector1Ms
+                              ? 'font-semibold text-emerald-300'
+                              : undefined
+                          }
+                        >
+                          S1 {formatLapTime(lap.sector1Ms)}
+                        </p>
+                        <p
+                          className={
+                            lap.sector2Ms !== null && lap.sector2Ms === bestSector2Ms
+                              ? 'font-semibold text-emerald-300'
+                              : undefined
+                          }
+                        >
+                          S2 {formatLapTime(lap.sector2Ms)}
+                        </p>
+                        <p
+                          className={
+                            lap.sector3Ms !== null && lap.sector3Ms === bestSector3Ms
+                              ? 'font-semibold text-emerald-300'
+                              : undefined
+                          }
+                        >
+                          S3 {formatLapTime(lap.sector3Ms)}
+                        </p>
                       </div>
                     </div>
                     <div>
@@ -355,9 +426,9 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                       <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
                         Fuel
                       </p>
-                      <p className="text-sm text-white">{formatNumber(lap.fuelUsed, '', 3)}</p>
+                      <p className="text-sm text-white">{formatPercentage(lap.fuelUsed, 1)}</p>
                       <p className="text-xs text-white/45">
-                        Rem. {formatNumber(lap.fuelRemaining, '', 3)}
+                        Rem. {formatPercentage(lap.fuelRemaining, 1)}
                       </p>
                     </div>
                     <div>
@@ -379,37 +450,6 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
         <aside className="space-y-6">
           <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
-              Contexto
-            </p>
-            <div className="mt-5 space-y-3">
-              <SessionDataLine label="Piloto" value={session.driverName} />
-              <SessionDataLine label="Equipo" value={session.teamName ?? 'No definido'} />
-              <SessionDataLine label="Coche" value={session.carName} />
-              <SessionDataLine
-                label="Clase"
-                value={session.sourceCarClass ?? session.carClassId ?? 'No definida'}
-              />
-              <SessionDataLine
-                label="Tipo de sesión"
-                value={formatSessionType(session.sessionType)}
-              />
-              <SessionDataLine label="Circuito" value={session.trackName} />
-              <SessionDataLine
-                label="Duración"
-                value={formatRaceDurationMinutes(session.raceDurationMinutes)}
-              />
-              <SessionDataLine
-                label="Fecha sesión"
-                value={
-                  session.sessionDateTime ? formatDate(session.sessionDateTime) : 'No definida'
-                }
-              />
-              <SessionDataLine label="Importada" value={formatDate(session.importedAt)} />
-            </div>
-          </section>
-
-          <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
               Telemetría rápida
             </p>
             <div className="mt-5 space-y-3">
@@ -422,28 +462,24 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                 value={session.compounds.rear ?? 'No definido'}
               />
               <SessionDataLine
-                label="Ventana fuel"
-                value={
-                  session.fuelMinPerLap !== null && session.fuelMaxPerLap !== null
-                    ? `${formatNumber(session.fuelMinPerLap, '', 3)} - ${formatNumber(
-                        session.fuelMaxPerLap,
-                        '',
-                        3,
-                      )}`
-                    : 'No definida'
-                }
+                label="Ventana consumo"
+                value={formatPercentageRange(
+                  session.virtualEnergyMinPerLap,
+                  session.virtualEnergyMaxPerLap,
+                  1,
+                )}
               />
               <SessionDataLine
-                label="Fuel 20 min"
-                value={formatNumber(session.projectedFuel20Minutes, '', 3)}
+                label="VE 20 min"
+                value={formatPercentage(session.projectedVirtualEnergy20Minutes, 1)}
               />
               <SessionDataLine
-                label="Fuel 30 min"
-                value={formatNumber(session.projectedFuel30Minutes, '', 3)}
+                label="VE 30 min"
+                value={formatPercentage(session.projectedVirtualEnergy30Minutes, 1)}
               />
               <SessionDataLine
-                label="Fuel 45 min"
-                value={formatNumber(session.projectedFuel45Minutes, '', 3)}
+                label="VE 45 min"
+                value={formatPercentage(session.projectedVirtualEnergy45Minutes, 1)}
               />
               <SessionDataLine
                 label="Deg. front/lap"

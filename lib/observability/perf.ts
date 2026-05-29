@@ -8,6 +8,11 @@ function sanitizePerfTraceDetails(details: PerfTraceDetails) {
   return Object.fromEntries(Object.entries(details).filter(([, value]) => value !== undefined));
 }
 
+function writePerfTrace(label: string, details: PerfTraceDetails) {
+  const serializedDetails = JSON.stringify(sanitizePerfTraceDetails(details));
+  process.stderr.write(`${label} ${serializedDetails}\n`);
+}
+
 export function createPerfTrace(label: string, initialDetails: PerfTraceDetails = {}) {
   const enabled = isPerfTracingEnabled();
   const startedAt = Date.now();
@@ -18,21 +23,18 @@ export function createPerfTrace(label: string, initialDetails: PerfTraceDetails 
         return;
       }
 
-      console.info(`[perf] ${label}:${message}`, sanitizePerfTraceDetails(details));
+      writePerfTrace(`[perf] ${label}:${message}`, details);
     },
     finish(details: PerfTraceDetails = {}) {
       if (!enabled) {
         return;
       }
 
-      console.info(
-        `[perf] ${label}:done`,
-        sanitizePerfTraceDetails({
-          durationMs: Date.now() - startedAt,
-          ...initialDetails,
-          ...details,
-        }),
-      );
+      writePerfTrace(`[perf] ${label}:done`, {
+        durationMs: Date.now() - startedAt,
+        ...initialDetails,
+        ...details,
+      });
     },
   };
 }
