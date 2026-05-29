@@ -280,235 +280,223 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_22rem]">
-        <div className="space-y-6">
+      <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_22rem] xl:items-start">
           <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-            <div className="space-y-2">
+            <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
                 Resultado
               </p>
-              <h3 className="text-2xl font-semibold tracking-tight text-white">Resumen completo</h3>
             </div>
-            <div className="mt-6 rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-4">
-              <div className="space-y-3">
-                <SessionDataLine label="Vueltas validas" value={String(session.validLapCount)} />
+            <div className="mt-6 space-y-3">
+              <SessionDataLine label="Vueltas validas" value={String(session.validLapCount)} />
+              <SessionDataLine
+                label="Velocidad maxima"
+                value={formatNumber(session.peakTopSpeedKph, ' km/h')}
+              />
+              <SessionDataLine
+                label="3 mejores vueltas"
+                value={formatLapTime(session.bestThreeLapAverageMs)}
+              />
+              <SessionDataLine
+                label="Últimas 3 vueltas"
+                value={formatLapTime(session.lastThreeLapAverageMs)}
+              />
+              <SessionDataLine
+                label="Ratio válidas"
+                value={formatPercentage(session.validLapRate)}
+              />
+              <SessionDataLine
+                label="VE inicial"
+                value={formatPercentage(session.virtualEnergyStart, 1)}
+              />
+              <SessionDataLine
+                label="VE media/vuelta"
+                value={formatPercentage(session.averageVirtualEnergyUsedPerLap, 1)}
+              />
+              <SessionDataLine
+                label="VE final"
+                value={formatPercentage(session.virtualEnergyEnd, 1)}
+              />
+              <SessionDataLine
+                label="Desgaste delantero"
+                value={formatPercentage(session.tireDropFront, 1)}
+              />
+              <SessionDataLine
+                label="Desgaste trasero"
+                value={formatPercentage(session.tireDropRear, 1)}
+              />
+              <SessionDataLine
+                label="Tiempo final"
+                value={formatSessionDuration(session.finishTimeSeconds)}
+              />
+              {session.pitstops !== 0 ? (
                 <SessionDataLine
-                  label="Velocidad maxima"
-                  value={formatNumber(session.peakTopSpeedKph, ' km/h')}
+                  label="Pitstops"
+                  value={String(session.pitstops ?? 'No definido')}
                 />
-                <SessionDataLine
-                  label="3 mejores vueltas"
-                  value={formatLapTime(session.bestThreeLapAverageMs)}
-                />
-                <SessionDataLine
-                  label="Últimas 3 vueltas"
-                  value={formatLapTime(session.lastThreeLapAverageMs)}
-                />
-                <SessionDataLine
-                  label="Ratio válidas"
-                  value={formatPercentage(session.validLapRate)}
-                />
-                <SessionDataLine
-                  label="Consumo/vuelta"
-                  value={formatPercentage(session.averageFuelUsedPerLap, 1)}
-                />
-                <SessionDataLine
-                  label="VE inicial"
-                  value={formatPercentage(session.virtualEnergyStart, 1)}
-                />
-                <SessionDataLine
-                  label="VE media/vuelta"
-                  value={formatPercentage(session.averageVirtualEnergyUsedPerLap, 1)}
-                />
-                <SessionDataLine
-                  label="VE final"
-                  value={formatPercentage(session.virtualEnergyEnd, 1)}
-                />
-                <SessionDataLine
-                  label="Desgaste delantero"
-                  value={formatPercentage(session.tireDropFront, 1)}
-                />
-                <SessionDataLine
-                  label="Desgaste trasero"
-                  value={formatPercentage(session.tireDropRear, 1)}
-                />
-                <SessionDataLine
-                  label="Tiempo final"
-                  value={formatSessionDuration(session.finishTimeSeconds)}
-                />
-                {session.pitstops !== 0 ? (
-                  <SessionDataLine
-                    label="Pitstops"
-                    value={String(session.pitstops ?? 'No definido')}
-                  />
-                ) : null}
-              </div>
+              ) : null}
             </div>
           </section>
 
-          <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-            <div className="space-y-2">
+          <aside>
+            <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
-                Stint
+                Telemetría rápida
               </p>
-              <h3 className="text-2xl font-semibold tracking-tight text-white">Ritmo por vuelta</h3>
-            </div>
-            <div className="mt-6 overflow-hidden rounded-[1.2rem] border border-white/8">
-              <div className="hidden grid-cols-[0.65fr_1fr_0.7fr_0.8fr_0.8fr] gap-4 border-b border-white/8 bg-white/[0.03] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
-                <span>Vuelta</span>
-                <span>Tiempo</span>
-                <span>Posición</span>
-                <span>Fuel</span>
-                <span>Pico</span>
+              <div className="mt-5 space-y-3">
+                <SessionDataLine
+                  label="Compuesto delantero"
+                  value={session.compounds.front ?? 'No definido'}
+                />
+                <SessionDataLine
+                  label="Compuesto trasero"
+                  value={session.compounds.rear ?? 'No definido'}
+                />
+                <SessionDataLine
+                  label="Ventana consumo"
+                  value={formatPercentageRange(
+                    session.virtualEnergyMinPerLap,
+                    session.virtualEnergyMaxPerLap,
+                    1,
+                  )}
+                />
+                <SessionDataLine
+                  label="VE 20 min"
+                  value={formatPercentage(session.projectedVirtualEnergy20Minutes, 1)}
+                />
+                <SessionDataLine
+                  label="VE 30 min"
+                  value={formatPercentage(session.projectedVirtualEnergy30Minutes, 1)}
+                />
+                <SessionDataLine
+                  label="VE 45 min"
+                  value={formatPercentage(session.projectedVirtualEnergy45Minutes, 1)}
+                />
+                <SessionDataLine
+                  label="Deg. front/lap"
+                  value={formatPercentage(session.tireDropFrontPerLap, 1)}
+                />
+                <SessionDataLine
+                  label="Deg. rear/lap"
+                  value={formatPercentage(session.tireDropRearPerLap, 1)}
+                />
+                <SessionDataLine
+                  label="Ratio front/rear"
+                  value={formatNumber(session.frontRearWearRatio, 'x', 2)}
+                />
+                <SessionDataLine
+                  label="Ratio right/left"
+                  value={formatNumber(session.leftRightWearRatio, 'x', 2)}
+                />
+                <SessionDataLine label="Incidentes" value={String(session.incidentsCount)} />
+                <SessionDataLine label="Penalizaciones" value={String(session.penaltiesCount)} />
+                <SessionDataLine label="Track limits" value={String(session.trackLimitsCount)} />
               </div>
-              <div className="divide-y divide-white/8">
-                {session.laps.map((lap) => (
-                  <div
-                    key={lap.lapNumber}
-                    className="grid grid-cols-2 gap-3 px-4 py-3 lg:grid-cols-[0.65fr_1fr_0.7fr_0.8fr_0.8fr] lg:items-center lg:gap-4"
-                  >
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
-                        Vuelta
-                      </p>
-                      <p className="text-sm text-white">{lap.lapNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
-                        Tiempo
+            </section>
+          </aside>
+        </div>
+
+        <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
+              Stint
+            </p>
+          </div>
+          <div className="mt-6 overflow-hidden rounded-[1.2rem] border border-white/8">
+            <div className="hidden grid-cols-[0.65fr_1fr_0.7fr_0.8fr_0.8fr] gap-4 border-b border-white/8 bg-white/[0.03] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+              <span>Vuelta</span>
+              <span>Tiempo</span>
+              <span>Posición</span>
+              <span>VE</span>
+              <span>Pico</span>
+            </div>
+            <div className="divide-y divide-white/8">
+              {session.laps.map((lap) => (
+                <div
+                  key={lap.lapNumber}
+                  className="grid grid-cols-2 gap-3 px-4 py-3 lg:grid-cols-[0.65fr_1fr_0.7fr_0.8fr_0.8fr] lg:items-center lg:gap-4"
+                >
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
+                      Vuelta
+                    </p>
+                    <p className="text-sm text-white">{lap.lapNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
+                      Tiempo
+                    </p>
+                    <p
+                      className={
+                        lap.lapTimeMs !== null && lap.lapTimeMs === session.bestLapMs
+                          ? 'text-sm font-semibold text-emerald-300'
+                          : 'text-sm text-white'
+                      }
+                    >
+                      {formatLapTime(lap.lapTimeMs)}
+                    </p>
+                    <div className="mt-1 space-y-0.5 text-xs text-white/45">
+                      <p
+                        className={
+                          lap.sector1Ms !== null && lap.sector1Ms === bestSector1Ms
+                            ? 'font-semibold text-emerald-300'
+                            : undefined
+                        }
+                      >
+                        S1 {formatLapTime(lap.sector1Ms)}
                       </p>
                       <p
                         className={
-                          lap.lapTimeMs !== null && lap.lapTimeMs === session.bestLapMs
-                            ? 'text-sm font-semibold text-emerald-300'
-                            : 'text-sm text-white'
+                          lap.sector2Ms !== null && lap.sector2Ms === bestSector2Ms
+                            ? 'font-semibold text-emerald-300'
+                            : undefined
                         }
                       >
-                        {formatLapTime(lap.lapTimeMs)}
+                        S2 {formatLapTime(lap.sector2Ms)}
                       </p>
-                      <div className="mt-1 space-y-0.5 text-xs text-white/45">
-                        <p
-                          className={
-                            lap.sector1Ms !== null && lap.sector1Ms === bestSector1Ms
-                              ? 'font-semibold text-emerald-300'
-                              : undefined
-                          }
-                        >
-                          S1 {formatLapTime(lap.sector1Ms)}
-                        </p>
-                        <p
-                          className={
-                            lap.sector2Ms !== null && lap.sector2Ms === bestSector2Ms
-                              ? 'font-semibold text-emerald-300'
-                              : undefined
-                          }
-                        >
-                          S2 {formatLapTime(lap.sector2Ms)}
-                        </p>
-                        <p
-                          className={
-                            lap.sector3Ms !== null && lap.sector3Ms === bestSector3Ms
-                              ? 'font-semibold text-emerald-300'
-                              : undefined
-                          }
-                        >
-                          S3 {formatLapTime(lap.sector3Ms)}
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
-                        Posición
-                      </p>
-                      <p className="text-sm text-white">{lap.runningPosition ?? 'No definida'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
-                        Fuel
-                      </p>
-                      <p className="text-sm text-white">{formatPercentage(lap.fuelUsed, 1)}</p>
-                      <p className="text-xs text-white/45">
-                        Rem. {formatPercentage(lap.fuelRemaining, 1)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
-                        Pico
-                      </p>
-                      <p className="text-sm text-white">{formatNumber(lap.topSpeedKph, ' km/h')}</p>
-                      <p className="text-xs text-white/45">
-                        {lap.pitFlag ? 'Pit' : lap.isValidLap ? 'Válida' : 'Inválida'}
+                      <p
+                        className={
+                          lap.sector3Ms !== null && lap.sector3Ms === bestSector3Ms
+                            ? 'font-semibold text-emerald-300'
+                            : undefined
+                        }
+                      >
+                        S3 {formatLapTime(lap.sector3Ms)}
                       </p>
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
+                      Posición
+                    </p>
+                    <p className="text-sm text-white">{lap.runningPosition ?? 'No definida'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
+                      VE
+                    </p>
+                    <p className="text-sm text-white">
+                      {formatPercentage(lap.virtualEnergyUsed, 1)}
+                    </p>
+                    <p className="text-xs text-white/45">
+                      Rem. {formatPercentage(lap.virtualEnergyRemaining, 1)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
+                      Pico
+                    </p>
+                    <p className="text-sm text-white">{formatNumber(lap.topSpeedKph, ' km/h')}</p>
+                    <p className="text-xs text-white/45">
+                      {lap.pitFlag ? 'Pit' : lap.isValidLap ? 'Válida' : 'Inválida'}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </section>
-        </div>
-
-        <aside className="space-y-6">
-          <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e1b27a]">
-              Telemetría rápida
-            </p>
-            <div className="mt-5 space-y-3">
-              <SessionDataLine
-                label="Compuesto delantero"
-                value={session.compounds.front ?? 'No definido'}
-              />
-              <SessionDataLine
-                label="Compuesto trasero"
-                value={session.compounds.rear ?? 'No definido'}
-              />
-              <SessionDataLine
-                label="Ventana consumo"
-                value={formatPercentageRange(
-                  session.virtualEnergyMinPerLap,
-                  session.virtualEnergyMaxPerLap,
-                  1,
-                )}
-              />
-              <SessionDataLine
-                label="VE 20 min"
-                value={formatPercentage(session.projectedVirtualEnergy20Minutes, 1)}
-              />
-              <SessionDataLine
-                label="VE 30 min"
-                value={formatPercentage(session.projectedVirtualEnergy30Minutes, 1)}
-              />
-              <SessionDataLine
-                label="VE 45 min"
-                value={formatPercentage(session.projectedVirtualEnergy45Minutes, 1)}
-              />
-              <SessionDataLine
-                label="Deg. front/lap"
-                value={formatNumber(session.tireDropFrontPerLap, '', 3)}
-              />
-              <SessionDataLine
-                label="Deg. rear/lap"
-                value={formatNumber(session.tireDropRearPerLap, '', 3)}
-              />
-              <SessionDataLine
-                label="Ratio front/rear"
-                value={formatNumber(session.frontRearWearRatio, 'x', 2)}
-              />
-              <SessionDataLine
-                label="Ratio right/left"
-                value={formatNumber(session.leftRightWearRatio, 'x', 2)}
-              />
-              <SessionDataLine label="Fuel mult." value={formatNumber(session.fuelMult, '', 2)} />
-              <SessionDataLine label="Tire mult." value={formatNumber(session.tireMult, '', 2)} />
-              <SessionDataLine
-                label="Damage mult."
-                value={formatNumber(session.damageMult, '', 2)}
-              />
-              <SessionDataLine label="Incidentes" value={String(session.incidentsCount)} />
-              <SessionDataLine label="Penalizaciones" value={String(session.penaltiesCount)} />
-              <SessionDataLine label="Track limits" value={String(session.trackLimitsCount)} />
-            </div>
-          </section>
-        </aside>
+          </div>
+        </section>
       </div>
 
       <section className="panel-dark rounded-[1.6rem] p-5 sm:p-6">

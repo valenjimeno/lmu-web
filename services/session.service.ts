@@ -983,11 +983,23 @@ export async function getSessionDetail(userId: string, sessionId: string) {
         ) / 10000
       : null;
   const firstLapWithVirtualEnergy = laps.find(
-    (lap) => typeof lap.virtual_energy_remaining === 'number',
+    (lap) =>
+      typeof lap.virtual_energy_remaining === 'number' ||
+      typeof lap.virtual_energy_used === 'number',
   );
   const lastLapWithVirtualEnergy = [...laps]
     .reverse()
     .find((lap) => typeof lap.virtual_energy_remaining === 'number');
+  const virtualEnergyStart =
+    firstLapWithVirtualEnergy &&
+    typeof firstLapWithVirtualEnergy.virtual_energy_remaining === 'number' &&
+    typeof firstLapWithVirtualEnergy.virtual_energy_used === 'number'
+      ? Math.round(
+          (firstLapWithVirtualEnergy.virtual_energy_remaining +
+            firstLapWithVirtualEnergy.virtual_energy_used) *
+            10000,
+        ) / 10000
+      : (firstLapWithVirtualEnergy?.virtual_energy_remaining ?? null);
   const derivedMetrics = deriveSessionMetrics(
     laps.map((lap) => ({
       lapTimeSeconds: lap.lap_time_seconds,
@@ -1052,7 +1064,7 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       virtualEnergyValues.length > 0 ? Math.min(...virtualEnergyValues) : null,
     virtualEnergyMaxPerLap:
       virtualEnergyValues.length > 0 ? Math.max(...virtualEnergyValues) : null,
-    virtualEnergyStart: firstLapWithVirtualEnergy?.virtual_energy_remaining ?? null,
+    virtualEnergyStart,
     virtualEnergyEnd: lastLapWithVirtualEnergy?.virtual_energy_remaining ?? null,
     projectedVirtualEnergy20Minutes: calculateConsumptionProjection(
       averageVirtualEnergyUsedPerLap,
