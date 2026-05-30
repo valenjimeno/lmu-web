@@ -5,6 +5,8 @@ export type SessionMetricsLapInput = {
   sector3Seconds: number | null;
   topSpeedKph: number | null;
   fuelUsed: number | null;
+  virtualEnergyRemaining: number | null;
+  virtualEnergyUsed: number | null;
   tireWearFl: number | null;
   tireWearFr: number | null;
   tireWearRl: number | null;
@@ -30,11 +32,19 @@ export type DerivedSessionMetrics = {
   validLapCount: number;
   validLapRate: number | null;
   averageFuelUsedPerLap: number | null;
+  averageVirtualEnergyUsedPerLap: number | null;
   fuelMinPerLap: number | null;
   fuelMaxPerLap: number | null;
+  virtualEnergyMinPerLap: number | null;
+  virtualEnergyMaxPerLap: number | null;
+  virtualEnergyStart: number | null;
+  virtualEnergyEnd: number | null;
   projectedFuel20Minutes: number | null;
   projectedFuel30Minutes: number | null;
   projectedFuel45Minutes: number | null;
+  projectedVirtualEnergy20Minutes: number | null;
+  projectedVirtualEnergy30Minutes: number | null;
+  projectedVirtualEnergy45Minutes: number | null;
   peakTopSpeedKph: number | null;
   tireDropFront: number | null;
   tireDropRear: number | null;
@@ -125,16 +135,21 @@ function calculateValidLapRate(laps: SessionMetricsLapInput[]) {
 }
 
 function calculateFuelProjection(
-  averageFuelUsedPerLap: number | null,
+  averageConsumptionPerLap: number | null,
   averageLapMs: number | null,
   minutes: number,
 ) {
-  if (averageFuelUsedPerLap === null || averageLapMs === null || averageLapMs <= 0) {
+  if (
+    averageConsumptionPerLap === null ||
+    averageConsumptionPerLap <= 0 ||
+    averageLapMs === null ||
+    averageLapMs <= 0
+  ) {
     return null;
   }
 
   const projectedLapCount = (minutes * 60_000) / averageLapMs;
-  return averageFuelUsedPerLap * projectedLapCount;
+  return averageConsumptionPerLap * projectedLapCount;
 }
 
 function calculateTireDrop(laps: SessionMetricsLapInput[]) {
@@ -319,12 +334,17 @@ export function deriveSessionMetrics(
   laps: SessionMetricsLapInput[],
   context: DeriveSessionMetricsContext = {},
 ): DerivedSessionMetrics {
+  const paceLaps = laps.filter((lap, index) => index > 0 && lap.lapTimeSeconds !== null);
   const validLaps = laps.filter(
     (lap) => lap.isValidLap && !lap.pitFlag && lap.lapTimeSeconds !== null,
   );
+  const paceLapTimesMs = paceLaps.map((lap) => Math.round((lap.lapTimeSeconds ?? 0) * 1000));
   const lapTimesMs = validLaps.map((lap) => Math.round((lap.lapTimeSeconds ?? 0) * 1000));
   const fuelValues = validLaps
     .map((lap) => lap.fuelUsed)
+    .filter((value): value is number => value !== null && value > 0);
+  const virtualEnergyValues = validLaps
+    .map((lap) => lap.virtualEnergyUsed)
     .filter((value): value is number => value !== null && value > 0);
   const topSpeeds = laps
     .map((lap) => lap.topSpeedKph)
@@ -340,7 +360,7 @@ export function deriveSessionMetrics(
       };
   const tireDrop = calculateTireDrop(laps);
   const wearProfile = calculateWearProfile(laps);
-  const averageLapMs = average(lapTimesMs);
+  const averageLapMs = average(paceLapTimesMs);
   const optimalLapMs = calculateOptimalLapMs(laps);
   const bestThreeLapAverageMs = calculateRollingAverage(lapTimesMs, 3, 'best');
   const lastThreeLapAverageMs = calculateRollingAverage(lapTimesMs, 3, 'last');
@@ -350,8 +370,31 @@ export function deriveSessionMetrics(
       ? lastThreeLapAverageMs - firstThreeLapAverageMs
       : null;
   const averageFuelUsedPerLap = average(fuelValues);
+  const averageVirtualEnergyUsedPerLap = average(virtualEnergyValues);
   const fuelMinPerLap = fuelValues.length > 0 ? Math.min(...fuelValues) : null;
   const fuelMaxPerLap = fuelValues.length > 0 ? Math.max(...fuelValues) : null;
+  const virtualEnergyMinPerLap =
+    virtualEnergyValues.length > 0 ? Math.min(...virtualEnergyValues) : null;
+  const virtualEnergyMaxPerLap =
+    virtualEnergyValues.length > 0 ? Math.max(...virtualEnergyValues) : null;
+  const firstLapWithVirtualEnergy = laps.find(
+    (lap) =>
+      typeof lap.virtualEnergyRemaining === 'number' || typeof lap.virtualEnergyUsed === 'number',
+  );
+  const lastLapWithVirtualEnergy = [...laps]
+    .reverse()
+    .find((lap) => typeof lap.virtualEnergyRemaining === 'number');
+  const virtualEnergyStart =
+    firstLapWithVirtualEnergy &&
+    typeof firstLapWithVirtualEnergy.virtualEnergyRemaining === 'number' &&
+    typeof firstLapWithVirtualEnergy.virtualEnergyUsed === 'number'
+      ? roundTo(
+          firstLapWithVirtualEnergy.virtualEnergyRemaining +
+            firstLapWithVirtualEnergy.virtualEnergyUsed,
+          4,
+        )
+      : (firstLapWithVirtualEnergy?.virtualEnergyRemaining ?? null);
+  const virtualEnergyEnd = lastLapWithVirtualEnergy?.virtualEnergyRemaining ?? null;
   const validLapRate = calculateValidLapRate(laps);
   const insights = buildSessionInsights({
     positionGain: context.positionGain ?? null,
@@ -380,8 +423,16 @@ export function deriveSessionMetrics(
     validLapRate: validLapRate !== null ? roundTo(validLapRate, 4) : null,
     averageFuelUsedPerLap:
       averageFuelUsedPerLap !== null ? roundTo(averageFuelUsedPerLap, 4) : null,
+    averageVirtualEnergyUsedPerLap:
+      averageVirtualEnergyUsedPerLap !== null ? roundTo(averageVirtualEnergyUsedPerLap, 4) : null,
     fuelMinPerLap: fuelMinPerLap !== null ? roundTo(fuelMinPerLap, 4) : null,
     fuelMaxPerLap: fuelMaxPerLap !== null ? roundTo(fuelMaxPerLap, 4) : null,
+    virtualEnergyMinPerLap:
+      virtualEnergyMinPerLap !== null ? roundTo(virtualEnergyMinPerLap, 4) : null,
+    virtualEnergyMaxPerLap:
+      virtualEnergyMaxPerLap !== null ? roundTo(virtualEnergyMaxPerLap, 4) : null,
+    virtualEnergyStart: virtualEnergyStart !== null ? roundTo(virtualEnergyStart, 4) : null,
+    virtualEnergyEnd: virtualEnergyEnd !== null ? roundTo(virtualEnergyEnd, 4) : null,
     projectedFuel20Minutes: roundOrNull(
       calculateFuelProjection(averageFuelUsedPerLap, averageLapMs, 20),
       4,
@@ -392,6 +443,18 @@ export function deriveSessionMetrics(
     ),
     projectedFuel45Minutes: roundOrNull(
       calculateFuelProjection(averageFuelUsedPerLap, averageLapMs, 45),
+      4,
+    ),
+    projectedVirtualEnergy20Minutes: roundOrNull(
+      calculateFuelProjection(averageVirtualEnergyUsedPerLap, averageLapMs, 20),
+      4,
+    ),
+    projectedVirtualEnergy30Minutes: roundOrNull(
+      calculateFuelProjection(averageVirtualEnergyUsedPerLap, averageLapMs, 30),
+      4,
+    ),
+    projectedVirtualEnergy45Minutes: roundOrNull(
+      calculateFuelProjection(averageVirtualEnergyUsedPerLap, averageLapMs, 45),
       4,
     ),
     peakTopSpeedKph: topSpeeds.length > 0 ? roundTo(Math.max(...topSpeeds), 2) : null,

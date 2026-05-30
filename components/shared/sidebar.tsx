@@ -1,18 +1,15 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { appNavigationItems } from '@/lib/constants/routes';
+import { AppNavigation } from '@/components/shared/app-navigation';
 import { PilotMenu } from '@/components/shared/pilot-menu';
-import { cn } from '@/lib/utils/cn';
+import type { AppNavigationBadgeMap } from '@/services/app-notification.service';
 
 type SidebarProps = {
   pilotName: string;
+  navigationBadges?: AppNavigationBadgeMap;
 };
 
-export function Sidebar({ pilotName }: SidebarProps) {
-  const pathname = usePathname();
-
+export function Sidebar({ pilotName, navigationBadges }: SidebarProps) {
   return (
     <aside className="panel-dark hidden w-[14rem] shrink-0 overflow-hidden rounded-[1.35rem] lg:flex lg:h-full lg:flex-col lg:self-stretch">
       <div className="flex h-full min-h-0 flex-col">
@@ -27,32 +24,11 @@ export function Sidebar({ pilotName }: SidebarProps) {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Principal
           </p>
-          <nav className="mt-3 space-y-1">
-            {appNavigationItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition',
-                    isActive
-                      ? 'bg-[rgba(225,178,122,0.14)] text-white'
-                      : 'text-white/70 hover:bg-white/[0.04] hover:text-white',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full border',
-                      isActive ? 'border-[#e1b27a] bg-[#e1b27a]' : 'border-white/30 bg-transparent',
-                    )}
-                  />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <AppNavigation
+            orientation="vertical"
+            badges={navigationBadges}
+            className="mt-3 space-y-1"
+          />
         </div>
 
         <div className="mt-auto border-t border-white/8 bg-[rgba(8,10,14,0.92)] px-3 py-4 backdrop-blur-xl">

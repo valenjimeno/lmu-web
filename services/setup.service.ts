@@ -12,6 +12,7 @@ type SetupRow = Pick<
   | 'name'
   | 'car_id'
   | 'track_id'
+  | 'team_id'
   | 'setup_type'
   | 'visibility'
   | 'created_at'
@@ -33,6 +34,7 @@ export type SetupSummary = {
   name: string;
   carId: string;
   trackId: string;
+  teamId: string | null;
   carClassId: string | null;
   carClassName: string;
   carName: string;
@@ -168,6 +170,7 @@ function buildSetupSummary(
     name: setup.name,
     carId: setup.car_id,
     trackId: setup.track_id,
+    teamId: setup.team_id,
     carClassId: car?.car_class_id ?? null,
     carClassName: carClassesById.get(car?.car_class_id ?? '') ?? 'Clase no disponible',
     carName: car?.name ?? 'Coche no disponible',
@@ -229,7 +232,7 @@ export async function getSetupPageData(
   let setupsQuery = supabase
     .from('setups')
     .select(
-      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+      'id, name, car_id, track_id, team_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       { count: 'exact' },
     )
     .eq('owner_user_id', userId);
@@ -374,7 +377,7 @@ export async function getSetupComparisonData(userId: string, filters: SetupCompa
   let setupsQuery = supabase
     .from('setups')
     .select(
-      'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+      'id, name, car_id, track_id, team_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
     )
     .eq('owner_user_id', userId)
     .not('best_lap_ms', 'is', null);
@@ -460,7 +463,7 @@ export async function getSetupDetail(userId: string, setupId: string) {
     supabase
       .from('setups')
       .select(
-        'id, name, car_id, track_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
+        'id, name, car_id, track_id, team_id, setup_type, visibility, created_at, updated_at, notes, race_duration_minutes, weather_summary, fuel_data, brake_bias, abs, tc, tc_power_cut, tc_slip_angle, best_lap_ms',
       )
       .eq('owner_user_id', userId)
       .eq('id', setupId)
@@ -516,6 +519,7 @@ type CreateSetupInput = {
   name: string;
   carId: string;
   trackId: string;
+  teamId?: string | null;
   setupType: Database['public']['Enums']['setup_type'];
   visibility: Database['public']['Enums']['setup_visibility'];
   notes?: string;
@@ -536,6 +540,7 @@ type UpdateSetupInput = {
   name: string;
   carId: string;
   trackId: string;
+  teamId?: string | null;
   setupType: Database['public']['Enums']['setup_type'];
   visibility: Database['public']['Enums']['setup_visibility'];
   notes?: string;
@@ -564,6 +569,7 @@ export async function createSetup(input: CreateSetupInput) {
       owner_user_id: input.ownerUserId,
       car_id: input.carId,
       track_id: input.trackId,
+      team_id: input.teamId ?? null,
       name: input.name,
       setup_type: input.setupType,
       visibility: input.visibility,
@@ -608,6 +614,7 @@ export async function updateSetup(input: UpdateSetupInput) {
       name: input.name,
       car_id: input.carId,
       track_id: input.trackId,
+      team_id: input.teamId ?? null,
       setup_type: input.setupType,
       visibility: input.visibility,
       notes: input.notes ? input.notes : null,

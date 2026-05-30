@@ -487,6 +487,7 @@ export type Database = {
       setup_sessions: {
         Row: {
           average_fuel_used_per_lap: number | null;
+          average_virtual_energy_used_per_lap: number | null;
           average_lap_ms: number | null;
           best_lap_seconds: number | null;
           best_three_lap_average_ms: number | null;
@@ -538,6 +539,9 @@ export type Database = {
           projected_fuel_20_minutes: number | null;
           projected_fuel_30_minutes: number | null;
           projected_fuel_45_minutes: number | null;
+          projected_virtual_energy_20_minutes: number | null;
+          projected_virtual_energy_30_minutes: number | null;
+          projected_virtual_energy_45_minutes: number | null;
           race_laps: number | null;
           race_time_minutes: number | null;
           raw_payload: Json;
@@ -570,9 +574,14 @@ export type Database = {
           veh_file: string | null;
           veh_name: string | null;
           vehicles_allowed: string | null;
+          virtual_energy_end: number | null;
+          virtual_energy_max_per_lap: number | null;
+          virtual_energy_min_per_lap: number | null;
+          virtual_energy_start: number | null;
         };
         Insert: {
           average_fuel_used_per_lap?: number | null;
+          average_virtual_energy_used_per_lap?: number | null;
           average_lap_ms?: number | null;
           best_lap_seconds?: number | null;
           best_three_lap_average_ms?: number | null;
@@ -624,6 +633,9 @@ export type Database = {
           projected_fuel_20_minutes?: number | null;
           projected_fuel_30_minutes?: number | null;
           projected_fuel_45_minutes?: number | null;
+          projected_virtual_energy_20_minutes?: number | null;
+          projected_virtual_energy_30_minutes?: number | null;
+          projected_virtual_energy_45_minutes?: number | null;
           race_laps?: number | null;
           race_time_minutes?: number | null;
           raw_payload?: Json;
@@ -656,9 +668,14 @@ export type Database = {
           veh_file?: string | null;
           veh_name?: string | null;
           vehicles_allowed?: string | null;
+          virtual_energy_end?: number | null;
+          virtual_energy_max_per_lap?: number | null;
+          virtual_energy_min_per_lap?: number | null;
+          virtual_energy_start?: number | null;
         };
         Update: {
           average_fuel_used_per_lap?: number | null;
+          average_virtual_energy_used_per_lap?: number | null;
           average_lap_ms?: number | null;
           best_lap_seconds?: number | null;
           best_three_lap_average_ms?: number | null;
@@ -710,6 +727,9 @@ export type Database = {
           projected_fuel_20_minutes?: number | null;
           projected_fuel_30_minutes?: number | null;
           projected_fuel_45_minutes?: number | null;
+          projected_virtual_energy_20_minutes?: number | null;
+          projected_virtual_energy_30_minutes?: number | null;
+          projected_virtual_energy_45_minutes?: number | null;
           race_laps?: number | null;
           race_time_minutes?: number | null;
           raw_payload?: Json;
@@ -742,6 +762,10 @@ export type Database = {
           veh_file?: string | null;
           veh_name?: string | null;
           vehicles_allowed?: string | null;
+          virtual_energy_end?: number | null;
+          virtual_energy_max_per_lap?: number | null;
+          virtual_energy_min_per_lap?: number | null;
+          virtual_energy_start?: number | null;
         };
         Relationships: [
           {
@@ -909,6 +933,59 @@ export type Database = {
           },
         ];
       };
+      team_invitations: {
+        Row: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string;
+          role: Database['public']['Enums']['team_role'];
+          status: Database['public']['Enums']['team_invitation_status'];
+          team_id: string;
+          token: string;
+          updated_at: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          email: string;
+          expires_at?: string;
+          id?: string;
+          invited_by: string;
+          role?: Database['public']['Enums']['team_role'];
+          status?: Database['public']['Enums']['team_invitation_status'];
+          team_id: string;
+          token?: string;
+          updated_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          invited_by?: string;
+          role?: Database['public']['Enums']['team_role'];
+          status?: Database['public']['Enums']['team_invitation_status'];
+          team_id?: string;
+          token?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'team_invitations_team_id_fkey';
+            columns: ['team_id'];
+            isOneToOne: false;
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       teams: {
         Row: {
           created_at: string;
@@ -1015,6 +1092,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      profile_exists_by_email: {
+        Args: { candidate_email: string };
+        Returns: boolean;
+      };
       is_team_member: { Args: { target_team_id: string }; Returns: boolean };
       is_team_owner: { Args: { target_team_id: string }; Returns: boolean };
     };
@@ -1023,6 +1104,7 @@ export type Database = {
       setup_visibility: 'private' | 'team' | 'public';
       subscription_plan: 'lite' | 'pro';
       subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'inactive';
+      team_invitation_status: 'pending' | 'accepted' | 'revoked' | 'expired';
       team_role: 'owner' | 'member';
     };
     CompositeTypes: {
@@ -1153,6 +1235,7 @@ export const Constants = {
       setup_visibility: ['private', 'team', 'public'],
       subscription_plan: ['lite', 'pro'],
       subscription_status: ['active', 'canceled', 'past_due', 'trialing', 'inactive'],
+      team_invitation_status: ['pending', 'accepted', 'revoked', 'expired'],
       team_role: ['owner', 'member'],
     },
   },

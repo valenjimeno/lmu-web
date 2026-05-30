@@ -61,35 +61,96 @@ const directionClasses = {
   neutral: 'text-muted-strong',
 } as const;
 
+const directionSurfaceClasses = {
+  better:
+    'border-[rgba(143,197,164,0.18)] bg-[linear-gradient(180deg,rgba(143,197,164,0.1),rgba(255,255,255,0.02))]',
+  worse:
+    'border-[rgba(242,162,148,0.18)] bg-[linear-gradient(180deg,rgba(242,162,148,0.08),rgba(255,255,255,0.02))]',
+  neutral:
+    'border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]',
+} as const;
+
 export function RecentVsBaseline({ data }: RecentVsBaselineProps) {
   return (
-    <article className="app-shell-card rounded-[1.8rem] p-6">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-        <div>
+    <article className="app-shell-card overflow-hidden rounded-[1.8rem] p-6">
+      <div className="rounded-[1.5rem] border border-white/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <p className="section-kicker font-semibold">Recent vs Baseline</p>
-          <h3 className="editorial-title mt-3 text-2xl text-white">Lo último frente a tu media</h3>
+          <div className="max-w-xl">
+            <h3 className="editorial-title text-2xl text-white">Lo último frente a tu media</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Contrasta tu muestra más reciente con la base histórica del mismo contexto para ver si
+              el progreso viene por ritmo, estabilidad o ejecución.
+            </p>
+          </div>
+          <div className="grid min-w-[16rem] gap-2 sm:grid-cols-2 lg:min-w-[19rem]">
+            <div className="rounded-[1rem] border border-white/8 bg-black/10 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Muestra reciente
+              </p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {data.recentWindowSize} sesiones
+              </p>
+            </div>
+            <div className="rounded-[1rem] border border-white/8 bg-black/10 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Base activa
+              </p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {data.baselineWindowSize} sesiones
+              </p>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-muted">
-          Últimas {data.recentWindowSize} sesiones vs base de {data.baselineWindowSize}
-        </p>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {data.metrics.map((metric) => (
-          <article key={metric.key} className="panel-dark rounded-[1.4rem] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              {metric.label}
-            </p>
-            <div className="mt-3 space-y-2">
-              <p className="text-lg font-semibold text-white">
+          <article
+            key={metric.key}
+            className={`rounded-[1.45rem] border p-4 shadow-[0_18px_40px_rgba(0,0,0,0.14)] ${directionSurfaceClasses[metric.direction]}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="max-w-[11rem] text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                {metric.label}
+              </p>
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${directionClasses[metric.direction]} border-current/15 bg-black/10`}
+              >
+                {metric.direction === 'better'
+                  ? 'Mejor'
+                  : metric.direction === 'worse'
+                    ? 'Peor'
+                    : 'Estable'}
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Reciente
+              </p>
+              <p className="mt-2 text-[1.9rem] leading-none font-semibold text-white">
                 {formatValue(metric.recentValue, metric.format)}
               </p>
-              <p className="text-xs text-muted">
-                Base: {formatValue(metric.baselineValue, metric.format)}
-              </p>
-              <p className={`text-sm font-semibold ${directionClasses[metric.direction]}`}>
-                {formatDelta(metric.delta, metric.format)}
-              </p>
+            </div>
+
+            <div className="mt-5 flex items-end justify-between gap-4 border-t border-white/8 pt-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Base
+                </p>
+                <p className="mt-1 text-sm font-medium text-white/72">
+                  {formatValue(metric.baselineValue, metric.format)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Delta
+                </p>
+                <p className={`mt-1 text-base font-semibold ${directionClasses[metric.direction]}`}>
+                  {formatDelta(metric.delta, metric.format)}
+                </p>
+              </div>
             </div>
           </article>
         ))}

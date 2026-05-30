@@ -73,26 +73,6 @@ export function DashboardDiagnosticsGrid({ diagnostics }: DashboardDiagnosticsGr
       />
 
       <DiagnosticCard
-        title="Stint"
-        body="Mira si el coche sostiene lo que promete en una vuelta y cuánto cae."
-        rows={[
-          {
-            label: 'Best 5-lap avg',
-            value: formatValue(diagnostics.stint.bestFiveLapAverageMs, 'lapTime'),
-          },
-          {
-            label: 'Last 3-lap avg',
-            value: formatValue(diagnostics.stint.lastThreeLapAverageMs, 'lapTime'),
-          },
-          { label: 'Pace fade', value: formatValue(diagnostics.stint.paceFadeMs, 'lapTime') },
-          {
-            label: 'Fuel / lap',
-            value: formatValue(diagnostics.stint.averageFuelUsedPerLap, 'decimal'),
-          },
-        ]}
-      />
-
-      <DiagnosticCard
         title="Execution"
         body="Separa el rendimiento de salida y carrera de la velocidad pura."
         rows={[

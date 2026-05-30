@@ -6,12 +6,14 @@ import { AppNavigation } from '@/components/shared/app-navigation';
 import { PilotMenu } from '@/components/shared/pilot-menu';
 import { routes } from '@/lib/constants/routes';
 import { appNavigationItems } from '@/lib/constants/routes';
+import type { AppNavigationBadgeMap } from '@/services/app-notification.service';
 
 type HeaderProps = {
   pilotName: string;
+  navigationBadges?: AppNavigationBadgeMap;
 };
 
-export function Header({ pilotName }: HeaderProps) {
+export function Header({ pilotName, navigationBadges }: HeaderProps) {
   const pathname = usePathname();
   const title = useMemo(() => {
     const matchedItem = appNavigationItems.find(
@@ -24,6 +26,10 @@ export function Header({ pilotName }: HeaderProps) {
 
     if (pathname === routes.profile || pathname.startsWith(`${routes.profile}/`)) {
       return 'Perfil';
+    }
+
+    if (pathname === routes.teams || pathname.startsWith(`${routes.teams}/`)) {
+      return 'Equipos';
     }
 
     return matchedItem?.title ?? 'LMU Web';
@@ -48,6 +54,7 @@ export function Header({ pilotName }: HeaderProps) {
 
         <AppNavigation
           orientation="horizontal"
+          badges={navigationBadges}
           className="rounded-[1rem] border border-white/8 bg-white/[0.03] p-2 lg:hidden"
         />
       </div>

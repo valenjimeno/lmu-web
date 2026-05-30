@@ -1,5 +1,6 @@
 export type Profile = {
   id: string;
+  activeTeamId?: string | null;
   nickname?: string | null;
   firstName?: string | null;
   lastName?: string | null;

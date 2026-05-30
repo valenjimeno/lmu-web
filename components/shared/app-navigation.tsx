@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { appNavigationItems } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils/cn';
+import type { AppNavigationBadgeMap } from '@/services/app-notification.service';
 
 type AppNavigationProps = {
   orientation?: 'horizontal' | 'vertical';
   className?: string;
+  badges?: AppNavigationBadgeMap;
 };
 
-export function AppNavigation({ orientation = 'vertical', className }: AppNavigationProps) {
+export function AppNavigation({ orientation = 'vertical', className, badges }: AppNavigationProps) {
   const pathname = usePathname();
   const isHorizontal = orientation === 'horizontal';
 
@@ -26,6 +28,7 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
     >
       {appNavigationItems.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const badgeCount = badges?.[item.icon] ?? 0;
 
         return (
           <Link
@@ -34,14 +37,27 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
             prefetch={false}
             className={cn(
               'flex items-center gap-3 rounded-[1.35rem] px-4 py-3 text-sm font-semibold transition duration-200',
-              isHorizontal ? 'shrink-0' : 'block',
+              isHorizontal ? 'shrink-0' : 'w-full',
               isActive
                 ? 'border border-[rgba(225,178,122,0.24)] bg-[linear-gradient(135deg,rgba(225,178,122,0.16),rgba(255,255,255,0.08))] text-white shadow-[0_14px_28px_rgba(0,0,0,0.26)]'
                 : 'border border-transparent bg-transparent text-muted hover:border-white/8 hover:bg-white/[0.05] hover:text-foreground',
             )}
           >
             <NavIcon type={item.icon} />
-            {item.label}
+            <span>{item.label}</span>
+            {badgeCount > 0 ? (
+              <span
+                className={cn(
+                  'ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-1 text-[11px] font-bold leading-none',
+                  isActive
+                    ? 'bg-white/14 text-white'
+                    : 'border border-[rgba(140,214,169,0.24)] bg-[rgba(140,214,169,0.12)] text-[#b9efc6]',
+                )}
+                aria-label={`${badgeCount} invitaciones pendientes`}
+              >
+                {badgeCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}
@@ -49,7 +65,11 @@ export function AppNavigation({ orientation = 'vertical', className }: AppNaviga
   );
 }
 
-function NavIcon({ type }: { type: 'dashboard' | 'speed' | 'compare' | 'profile' | 'sessions' }) {
+function NavIcon({
+  type,
+}: {
+  type: 'dashboard' | 'speed' | 'compare' | 'profile' | 'sessions' | 'teams';
+}) {
   const className = 'h-[18px] w-[18px] shrink-0';
 
   if (type === 'dashboard') {
@@ -126,6 +146,25 @@ function NavIcon({ type }: { type: 'dashboard' | 'speed' | 'compare' | 'profile'
         <rect x="4.75" y="5.75" width="14.5" height="13.5" rx="2.5" />
         <path d="M8.5 12h3" />
         <path d="M8.5 16h7" />
+      </svg>
+    );
+  }
+
+  if (type === 'teams') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 11.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Z" />
+        <path d="M17 9.75a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />
+        <path d="M4.75 18.25a4.25 4.25 0 0 1 8.5 0" />
+        <path d="M13.5 18.25a3.5 3.5 0 0 1 7 0" />
       </svg>
     );
   }

@@ -79,11 +79,19 @@ type SetupSessionDetailRow = Pick<
   | 'valid_lap_count'
   | 'valid_lap_rate'
   | 'average_fuel_used_per_lap'
+  | 'average_virtual_energy_used_per_lap'
   | 'fuel_min_per_lap'
   | 'fuel_max_per_lap'
+  | 'virtual_energy_min_per_lap'
+  | 'virtual_energy_max_per_lap'
+  | 'virtual_energy_start'
+  | 'virtual_energy_end'
   | 'projected_fuel_20_minutes'
   | 'projected_fuel_30_minutes'
   | 'projected_fuel_45_minutes'
+  | 'projected_virtual_energy_20_minutes'
+  | 'projected_virtual_energy_30_minutes'
+  | 'projected_virtual_energy_45_minutes'
   | 'peak_top_speed_kph'
   | 'tire_drop_front'
   | 'tire_drop_rear'
@@ -310,6 +318,16 @@ function calculateConsumptionProjection(
   return Math.round(averageConsumptionPerLap * projectedLapCount * 10000) / 10000;
 }
 
+function coalesceNumber(...values: Array<number | null | undefined>) {
+  for (const value of values) {
+    if (typeof value === 'number') {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function buildSessionSummary(
   session: SessionIdentityRow,
   setup: SetupLinkRow | undefined,
@@ -376,7 +394,7 @@ function buildSessionIdentity(
 }
 
 const setupSessionDetailSelectWithMetrics =
-  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, source_session_setting, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, valid_lap_count, valid_lap_rate, average_fuel_used_per_lap, fuel_min_per_lap, fuel_max_per_lap, projected_fuel_20_minutes, projected_fuel_30_minutes, projected_fuel_45_minutes, peak_top_speed_kph, tire_drop_front, tire_drop_rear, tire_drop_front_per_lap, tire_drop_rear_per_lap, front_rear_wear_ratio, left_right_wear_ratio, front_compound, rear_compound, insights';
+  'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, source_session_setting, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, last_three_lap_average_ms, pace_fade_ms, valid_lap_count, valid_lap_rate, average_fuel_used_per_lap, average_virtual_energy_used_per_lap, fuel_min_per_lap, fuel_max_per_lap, virtual_energy_min_per_lap, virtual_energy_max_per_lap, virtual_energy_start, virtual_energy_end, projected_fuel_20_minutes, projected_fuel_30_minutes, projected_fuel_45_minutes, projected_virtual_energy_20_minutes, projected_virtual_energy_30_minutes, projected_virtual_energy_45_minutes, peak_top_speed_kph, tire_drop_front, tire_drop_rear, tire_drop_front_per_lap, tire_drop_rear_per_lap, front_rear_wear_ratio, left_right_wear_ratio, front_compound, rear_compound, insights';
 
 const setupSessionDetailSelectLegacy =
   'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_type, imported_at, session_datetime, session_type, source_session_setting, server_name, game_version, track_venue, track_course, track_event, track_layout_path, track_length_m, vehicles_allowed, race_time_minutes, race_laps, damage_mult, fuel_mult, tire_mult, mech_fail_rate, team_name, car_number, control_and_aids, finish_pos, grid_pos, finish_status, laps_completed, pitstops, best_lap_seconds, finish_time_seconds, incidents_count, penalties_count, track_limits_count';
@@ -1008,6 +1026,8 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       sector3Seconds: lap.sector_3_seconds,
       topSpeedKph: lap.top_speed_kph,
       fuelUsed: lap.fuel_used,
+      virtualEnergyRemaining: lap.virtual_energy_remaining,
+      virtualEnergyUsed: lap.virtual_energy_used,
       tireWearFl: lap.tire_wear_fl,
       tireWearFr: lap.tire_wear_fr,
       tireWearRl: lap.tire_wear_rl,
@@ -1021,6 +1041,32 @@ export async function getSessionDetail(userId: string, sessionId: string) {
       positionGain: identity.positionGain,
       finishPos: identity.finishPos,
     },
+  );
+  const resolvedAverageLapMs = derivedMetrics.averageLapMs ?? session.average_lap_ms;
+  const resolvedAverageVirtualEnergyUsedPerLap = coalesceNumber(
+    session.average_virtual_energy_used_per_lap,
+    derivedMetrics.averageVirtualEnergyUsedPerLap,
+    averageVirtualEnergyUsedPerLap,
+  );
+  const resolvedVirtualEnergyMinPerLap = coalesceNumber(
+    session.virtual_energy_min_per_lap,
+    derivedMetrics.virtualEnergyMinPerLap,
+    virtualEnergyValues.length > 0 ? Math.min(...virtualEnergyValues) : null,
+  );
+  const resolvedVirtualEnergyMaxPerLap = coalesceNumber(
+    session.virtual_energy_max_per_lap,
+    derivedMetrics.virtualEnergyMaxPerLap,
+    virtualEnergyValues.length > 0 ? Math.max(...virtualEnergyValues) : null,
+  );
+  const resolvedVirtualEnergyStart = coalesceNumber(
+    session.virtual_energy_start,
+    derivedMetrics.virtualEnergyStart,
+    virtualEnergyStart,
+  );
+  const resolvedVirtualEnergyEnd = coalesceNumber(
+    session.virtual_energy_end,
+    derivedMetrics.virtualEnergyEnd,
+    lastLapWithVirtualEnergy?.virtual_energy_remaining,
   );
 
   const detail = {
@@ -1046,7 +1092,7 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     incidentsCount: session.incidents_count,
     penaltiesCount: session.penalties_count,
     trackLimitsCount: session.track_limits_count,
-    averageLapMs: session.average_lap_ms ?? derivedMetrics.averageLapMs,
+    averageLapMs: resolvedAverageLapMs,
     optimalLapMs: session.optimal_lap_ms ?? derivedMetrics.optimalLapMs,
     lapConsistencyMs: session.lap_consistency_ms ?? derivedMetrics.lapConsistencyMs,
     bestThreeLapAverageMs:
@@ -1057,29 +1103,39 @@ export async function getSessionDetail(userId: string, sessionId: string) {
     validLapRate: session.valid_lap_rate ?? derivedMetrics.validLapRate,
     averageFuelUsedPerLap:
       session.average_fuel_used_per_lap ?? derivedMetrics.averageFuelUsedPerLap,
-    averageVirtualEnergyUsedPerLap,
+    averageVirtualEnergyUsedPerLap: resolvedAverageVirtualEnergyUsedPerLap,
     fuelMinPerLap: session.fuel_min_per_lap ?? derivedMetrics.fuelMinPerLap,
     fuelMaxPerLap: session.fuel_max_per_lap ?? derivedMetrics.fuelMaxPerLap,
-    virtualEnergyMinPerLap:
-      virtualEnergyValues.length > 0 ? Math.min(...virtualEnergyValues) : null,
-    virtualEnergyMaxPerLap:
-      virtualEnergyValues.length > 0 ? Math.max(...virtualEnergyValues) : null,
-    virtualEnergyStart,
-    virtualEnergyEnd: lastLapWithVirtualEnergy?.virtual_energy_remaining ?? null,
-    projectedVirtualEnergy20Minutes: calculateConsumptionProjection(
-      averageVirtualEnergyUsedPerLap,
-      session.average_lap_ms ?? derivedMetrics.averageLapMs,
-      20,
+    virtualEnergyMinPerLap: resolvedVirtualEnergyMinPerLap,
+    virtualEnergyMaxPerLap: resolvedVirtualEnergyMaxPerLap,
+    virtualEnergyStart: resolvedVirtualEnergyStart,
+    virtualEnergyEnd: resolvedVirtualEnergyEnd,
+    projectedVirtualEnergy20Minutes: coalesceNumber(
+      session.projected_virtual_energy_20_minutes,
+      derivedMetrics.projectedVirtualEnergy20Minutes,
+      calculateConsumptionProjection(
+        resolvedAverageVirtualEnergyUsedPerLap,
+        resolvedAverageLapMs,
+        20,
+      ),
     ),
-    projectedVirtualEnergy30Minutes: calculateConsumptionProjection(
-      averageVirtualEnergyUsedPerLap,
-      session.average_lap_ms ?? derivedMetrics.averageLapMs,
-      30,
+    projectedVirtualEnergy30Minutes: coalesceNumber(
+      session.projected_virtual_energy_30_minutes,
+      derivedMetrics.projectedVirtualEnergy30Minutes,
+      calculateConsumptionProjection(
+        resolvedAverageVirtualEnergyUsedPerLap,
+        resolvedAverageLapMs,
+        30,
+      ),
     ),
-    projectedVirtualEnergy45Minutes: calculateConsumptionProjection(
-      averageVirtualEnergyUsedPerLap,
-      session.average_lap_ms ?? derivedMetrics.averageLapMs,
-      45,
+    projectedVirtualEnergy45Minutes: coalesceNumber(
+      session.projected_virtual_energy_45_minutes,
+      derivedMetrics.projectedVirtualEnergy45Minutes,
+      calculateConsumptionProjection(
+        resolvedAverageVirtualEnergyUsedPerLap,
+        resolvedAverageLapMs,
+        45,
+      ),
     ),
     projectedFuel20Minutes:
       session.projected_fuel_20_minutes ?? derivedMetrics.projectedFuel20Minutes,

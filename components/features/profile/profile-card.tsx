@@ -1,27 +1,19 @@
-import { createTeamAction, updateProfileAction } from '@/app/(app)/profile/actions';
+import Link from 'next/link';
+import { updateProfileAction } from '@/app/(app)/profile/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { routes } from '@/lib/constants/routes';
 import type { UserEntitlements } from '@/services/entitlement.service';
-import type { TeamSummary } from '@/services/team.service';
 import type { Profile } from '@/types/profile.types';
 
 const messageByCode = {
   missing_required_fields: 'Completa nombre, apellido y nickname antes de guardar.',
-  missing_team_name: 'Escribe un nombre para el equipo antes de crearlo.',
-  team_creation_requires_pro: 'Tu plan actual no permite crear equipos. Necesitas Pro.',
-  team_limit_reached:
-    'Ya has alcanzado el número máximo de equipos permitidos para tu suscripción actual.',
-  team_slug_conflict:
-    'No hemos podido reservar un slug único para el equipo. Prueba con otro nombre.',
-  create_team_failed: 'No hemos podido crear el equipo. Inténtalo de nuevo en unos segundos.',
   profile_updated: 'Perfil actualizado correctamente.',
-  team_created: 'Equipo creado correctamente.',
 } as const;
 
 type ProfileCardProps = {
   profile: Profile | null;
   entitlements: UserEntitlements;
-  teams: TeamSummary[];
   errorCode?: string;
   successCode?: string;
 };
@@ -30,17 +22,7 @@ function formatPlanName(plan: UserEntitlements['plan']) {
   return plan === 'pro' ? 'Pro' : 'Lite';
 }
 
-function formatRoleName(role: TeamSummary['role']) {
-  return role === 'owner' ? 'Owner' : 'Miembro';
-}
-
-export function ProfileCard({
-  profile,
-  entitlements,
-  teams,
-  errorCode,
-  successCode,
-}: ProfileCardProps) {
+export function ProfileCard({ profile, entitlements, errorCode, successCode }: ProfileCardProps) {
   const successMessage =
     successCode && successCode in messageByCode
       ? messageByCode[successCode as keyof typeof messageByCode]
@@ -49,7 +31,6 @@ export function ProfileCard({
     errorCode && errorCode in messageByCode
       ? messageByCode[errorCode as keyof typeof messageByCode]
       : null;
-  const teamsOwnedCount = teams.filter((team) => team.role === 'owner').length;
 
   return (
     <section className="app-shell-card max-w-5xl rounded-[2rem] p-6">
@@ -134,7 +115,7 @@ export function ProfileCard({
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {entitlements.canCreateTeams
                     ? 'Tu suscripción actual ya permite crear equipos y colaborar con otros pilotos.'
-                    : 'Con Lite puedes trabajar en solitario. Necesitarás Pro para crear equipos e importar en lote.'}
+                    : 'Con Lite puedes trabajar en solitario. Necesitarás Pro para desbloquear Equipos e importación en lote.'}
                 </p>
               </div>
               <span className="rounded-full border border-[rgba(225,178,122,0.28)] bg-[rgba(225,178,122,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#f5d4aa]">
@@ -144,12 +125,14 @@ export function ProfileCard({
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[1.2rem] border border-white/8 bg-black/10 p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                  Equipos propios
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted">Equipos</p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {entitlements.canCreateTeams ? 'Activo' : 'Bloqueado'}
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-white">{teamsOwnedCount}</p>
                 <p className="mt-1 text-xs text-muted">
-                  Límite actual: {entitlements.maxTeamsOwned ?? 'Sin límite'}
+                  {entitlements.canCreateTeams
+                    ? 'Gestiona tus espacios colaborativos desde la seccion Equipos.'
+                    : 'Actualiza a Pro para crear y gestionar equipos.'}
                 </p>
               </div>
               <div className="rounded-[1.2rem] border border-white/8 bg-black/10 p-4">
@@ -167,70 +150,17 @@ export function ProfileCard({
           </section>
 
           <section className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-white">Equipos</p>
-                <p className="mt-1 text-sm text-muted">
-                  Gestiona tu primer espacio colaborativo desde aquí.
-                </p>
-              </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/72">
-                {teams.length} {teams.length === 1 ? 'equipo' : 'equipos'}
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {teams.length > 0 ? (
-                teams.map((team) => (
-                  <div
-                    key={team.id}
-                    className="rounded-[1.2rem] border border-white/8 bg-black/10 px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-white">{team.name}</p>
-                        <p className="mt-1 text-xs text-muted">@{team.slug}</p>
-                      </div>
-                      <span className="rounded-full border border-[rgba(225,178,122,0.22)] bg-[rgba(225,178,122,0.08)] px-3 py-1 text-xs text-[#f5d4aa]">
-                        {formatRoleName(team.role)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[1.2rem] border border-dashed border-white/12 bg-black/10 px-4 py-4 text-sm text-muted">
-                  Aún no perteneces a ningún equipo.
-                </div>
-              )}
-            </div>
-
-            <form action={createTeamAction} className="mt-5 space-y-4 border-t border-white/8 pt-5">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground" htmlFor="teamName">
-                  Nombre del equipo
-                </label>
-                <Input
-                  id="teamName"
-                  name="teamName"
-                  placeholder="Ej. LMU Endurance"
-                  maxLength={80}
-                  disabled={!entitlements.canCreateTeams}
-                />
-              </div>
-
-              {!entitlements.canCreateTeams ? (
-                <p className="rounded-[1.2rem] border border-[rgba(225,178,122,0.22)] bg-[rgba(225,178,122,0.08)] px-4 py-3 text-sm text-[#f5d4aa]">
-                  El plan Lite no permite crear equipos. Cuando demos el siguiente paso, aquí
-                  conectaremos el upgrade a Pro.
-                </p>
-              ) : null}
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={!entitlements.canCreateTeams}>
-                  Crear equipo
-                </Button>
-              </div>
-            </form>
+            <p className="text-sm font-medium text-white">Espacios Pro</p>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              La gestion de equipos ya no vive dentro del perfil. Ahora tiene su propio espacio para
+              crecer sin mezclar configuracion personal con colaboracion.
+            </p>
+            <Link
+              href={routes.teams}
+              className="mt-5 inline-flex rounded-full border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.1)] px-4 py-2 text-sm font-semibold text-[#f5d4aa] transition hover:bg-[rgba(225,178,122,0.16)]"
+            >
+              Ir a Equipos
+            </Link>
           </section>
         </div>
       </div>

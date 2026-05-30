@@ -34,6 +34,11 @@ type SetupFormModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
+  activeTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   titleKicker: string;
   title: string;
   description: string;
@@ -69,6 +74,11 @@ type CreateSetupModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
+  activeTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   triggerClassName?: string;
 };
 
@@ -77,6 +87,11 @@ type EditSetupModalProps = {
   cars: CarOption[];
   tracks: Option[];
   defaultCarClassId?: string;
+  activeTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   setup: SetupSummary;
   preferredDriverName?: string;
   triggerClassName?: string;
@@ -165,11 +180,23 @@ function WeatherIcon({ type }: { type: WeatherValue }) {
   );
 }
 
+function resolveInitialVisibility(
+  visibility: SetupSummary['visibility'] | undefined,
+  hasActiveTeam: boolean,
+) {
+  if (visibility === 'team' && !hasActiveTeam) {
+    return 'private' as SetupSummary['visibility'];
+  }
+
+  return visibility ?? 'private';
+}
+
 function SetupFormModal({
   carClasses,
   cars,
   tracks,
   defaultCarClassId,
+  activeTeam,
   titleKicker,
   title,
   description,
@@ -191,13 +218,24 @@ function SetupFormModal({
       : 'sun',
   );
   const [selectedVisibility, setSelectedVisibility] = useState<SetupSummary['visibility']>(
-    defaultValues?.visibility ?? 'private',
+    resolveInitialVisibility(defaultValues?.visibility, Boolean(activeTeam)),
   );
 
   const filteredCars = useMemo(
     () => cars.filter((car) => !selectedCarClassId || car.carClassId === selectedCarClassId),
     [cars, selectedCarClassId],
   );
+  const resolvedVisibilityOptions = useMemo(() => {
+    if (!activeTeam) {
+      return visibilityOptions;
+    }
+
+    return [
+      visibilityOptions[0],
+      { value: 'team' as SetupSummary['visibility'], label: `Equipo (${activeTeam.name})` },
+      visibilityOptions[1],
+    ];
+  }, [activeTeam]);
 
   function openModal() {
     setIsDuplicateMode(false);
@@ -208,7 +246,7 @@ function SetupFormModal({
         ? defaultValues.weatherSummary
         : 'sun',
     );
-    setSelectedVisibility(defaultValues?.visibility ?? 'private');
+    setSelectedVisibility(resolveInitialVisibility(defaultValues?.visibility, Boolean(activeTeam)));
     setIsOpen(true);
   }
 
@@ -370,7 +408,7 @@ function SetupFormModal({
               <fieldset className="space-y-3">
                 <legend className="text-sm font-medium text-foreground">Visibilidad</legend>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {visibilityOptions.map((option) => {
+                  {resolvedVisibilityOptions.map((option) => {
                     const isSelected = selectedVisibility === option.value;
 
                     return (
@@ -395,6 +433,11 @@ function SetupFormModal({
                     );
                   })}
                 </div>
+                {!activeTeam ? (
+                  <p className="text-xs text-muted">
+                    La visibilidad de equipo solo aparece cuando tienes un equipo activo.
+                  </p>
+                ) : null}
               </fieldset>
 
               <label className={fieldCardClassName}>
@@ -608,6 +651,7 @@ export function CreateSetupModal({
   cars,
   tracks,
   defaultCarClassId,
+  activeTeam,
   triggerClassName,
 }: CreateSetupModalProps) {
   return (
@@ -616,6 +660,7 @@ export function CreateSetupModal({
       cars={cars}
       tracks={tracks}
       defaultCarClassId={defaultCarClassId}
+      activeTeam={activeTeam}
       titleKicker="Nuevo setup"
       title="Crear una configuración nueva"
       description="Añade coche, pista, tipo, visibilidad y notas sin salir de la biblioteca. El formulario mantiene una lectura clara también en móvil."
@@ -641,6 +686,7 @@ export function EditSetupModal({
   cars,
   tracks,
   defaultCarClassId,
+  activeTeam,
   setup,
   preferredDriverName,
   triggerClassName,
@@ -651,6 +697,7 @@ export function EditSetupModal({
       cars={cars}
       tracks={tracks}
       defaultCarClassId={defaultCarClassId}
+      activeTeam={activeTeam}
       titleKicker="Editar setup"
       title="Actualizar configuración"
       description="Modifica los valores actuales sin salir de la biblioteca. Al guardar, la fecha de modificación se actualiza automáticamente."

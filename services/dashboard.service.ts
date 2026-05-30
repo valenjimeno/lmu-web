@@ -1042,7 +1042,7 @@ function compareMetric(
 }
 
 function buildRecentVsBaseline(trends: TrendPoint[]) {
-  const recentWindowSize = Math.min(10, trends.length);
+  const recentWindowSize = Math.min(5, trends.length);
   const recent = trends.slice(0, recentWindowSize);
   const baseline = trends.slice(recentWindowSize);
   const baselinePool = baseline.length > 0 ? baseline : trends;
@@ -1059,8 +1059,8 @@ function buildRecentVsBaseline(trends: TrendPoint[]) {
     {
       key: 'bestLapMs',
       label: 'Ritmo rápido',
-      recentValue: average(recent.map((item) => item.bestLapMs)),
-      baselineValue: average(baselinePool.map((item) => item.bestLapMs)),
+      recentValue: minimum(recent.map((item) => item.bestLapMs)),
+      baselineValue: minimum(baselinePool.map((item) => item.bestLapMs)),
       betterWhenLower: true,
       format: 'lapTime',
     },
@@ -1071,14 +1071,6 @@ function buildRecentVsBaseline(trends: TrendPoint[]) {
       baselineValue: average(baselinePool.map((item) => item.lapConsistencyMs)),
       betterWhenLower: true,
       format: 'lapTime',
-    },
-    {
-      key: 'validLapRate',
-      label: 'Vueltas válidas',
-      recentValue: average(recent.map((item) => item.validLapRate)),
-      baselineValue: average(baselinePool.map((item) => item.validLapRate)),
-      betterWhenLower: false,
-      format: 'percent',
     },
     {
       key: 'incidentsCount',
@@ -1665,16 +1657,10 @@ export async function getDriverOverviewData(
 
         return roundTo(Math.max(0, bestLap - optimalLap), 1);
       })(),
-      bestThreeLapAverageMs: roundTo(
-        average(filteredSessions.map((item) => item.bestThreeLapAverageMs)),
-        1,
-      ),
+      bestThreeLapAverageMs: minimum(filteredSessions.map((item) => item.bestThreeLapAverageMs)),
     },
     stint: {
-      bestFiveLapAverageMs: roundTo(
-        average(filteredSessions.map((item) => item.bestFiveLapAverageMs)),
-        1,
-      ),
+      bestFiveLapAverageMs: minimum(filteredSessions.map((item) => item.bestFiveLapAverageMs)),
       lastThreeLapAverageMs: roundTo(
         average(filteredSessions.map((item) => item.lastThreeLapAverageMs)),
         1,

@@ -10,7 +10,6 @@ import { DashboardExecutiveSummary } from '@/components/features/dashboard/dashb
 import { DashboardFilters } from '@/components/features/dashboard/dashboard-filters';
 import { CleanlinessPanel } from '@/components/features/dashboard/cleanliness-panel';
 import { DashboardInsights } from '@/components/features/dashboard/dashboard-insights';
-import { DashboardRecommendedActions } from '@/components/features/dashboard/dashboard-recommended-actions';
 import { KpiGrid } from '@/components/features/dashboard/kpi-grid';
 import { PerformanceTrendChart } from '@/components/features/dashboard/performance-trend-chart';
 import { PilotSummaryPanel } from '@/components/features/dashboard/pilot-summary-panel';
@@ -146,14 +145,6 @@ export function DashboardOverview({
 
       {isContextualMode ? (
         <>
-          <DashboardSection
-            kicker="Decision"
-            title="Que haria con este combo"
-            description="El foco arranca por la conclusion accionable: si este coche y circuito merecen mas vueltas, vigilancia o cambios concretos."
-          >
-            <DashboardRecommendedActions actions={data.recommendedActions} />
-          </DashboardSection>
-
           <DashboardSection
             kicker="Fit"
             title="Que coche encaja mejor aqui"

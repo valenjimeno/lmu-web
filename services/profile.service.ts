@@ -43,6 +43,7 @@ function mapProfile(row: ProfileRow | null): Profile | null {
 
   return {
     id: row.id,
+    activeTeamId: row.active_team_id,
     nickname: row.display_name,
     firstName: row.first_name,
     lastName: row.last_name,
@@ -79,7 +80,7 @@ export async function getProfilePageData(userId: string) {
   const supabase = await createClient();
   const profileResult = await supabase
     .from('profiles')
-    .select('id, display_name, first_name, last_name, full_name')
+    .select('id, active_team_id, display_name, first_name, last_name, full_name')
     .eq('id', userId)
     .maybeSingle();
 
@@ -102,7 +103,7 @@ export async function ensureProfileForUser(user: User) {
   const supabase = await createClient();
   const existingProfileResult = await supabase
     .from('profiles')
-    .select('id, display_name, first_name, last_name, full_name')
+    .select('id, active_team_id, display_name, first_name, last_name, full_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -135,7 +136,7 @@ export async function ensureProfileForUser(user: User) {
       full_name: fullName,
       preferences: {},
     })
-    .select('id, display_name, first_name, last_name, full_name')
+    .select('id, active_team_id, display_name, first_name, last_name, full_name')
     .single();
 
   if (insertResult.error) {

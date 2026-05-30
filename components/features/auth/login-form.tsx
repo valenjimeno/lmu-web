@@ -4,11 +4,18 @@ import { Input } from '@/components/ui/input';
 
 type LoginFormProps = {
   errorMessage?: string;
+  redirectTo?: string;
+  redirectToFieldName?: string;
 };
 
-export function LoginForm({ errorMessage }: LoginFormProps) {
+export function LoginForm({
+  errorMessage,
+  redirectTo,
+  redirectToFieldName = 'redirectTo',
+}: LoginFormProps) {
   return (
     <form action={login} className="space-y-4">
+      <input type="hidden" name={redirectToFieldName} value={redirectTo} />
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground" htmlFor="email">
           Email

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { routes } from '@/lib/constants/routes';
 import { getCurrentUser } from '@/lib/supabase/auth';
+import { createClient } from '@/lib/supabase/server';
 import {
   createSetup,
   deleteSetup,
@@ -124,6 +125,34 @@ function serializeImportError(error: unknown) {
   return 'unknown_import_error';
 }
 
+async function resolveActiveTeamIdForVisibility(
+  userId: string,
+  visibility: Database['public']['Enums']['setup_visibility'],
+) {
+  if (visibility !== 'team') {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const profileResult = await supabase
+    .from('profiles')
+    .select('active_team_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileResult.error) {
+    throw profileResult.error;
+  }
+
+  const activeTeamId = profileResult.data?.active_team_id ?? null;
+
+  if (!activeTeamId) {
+    throw new Error('team_visibility_requires_active_team');
+  }
+
+  return activeTeamId;
+}
+
 export async function createSetupAction(formData: FormData) {
   const user = await getCurrentUser();
 
@@ -175,13 +204,17 @@ export async function createSetupAction(formData: FormData) {
   }
 
   try {
+    const visibility = rawVisibility as Database['public']['Enums']['setup_visibility'];
+    const activeTeamId = await resolveActiveTeamIdForVisibility(user.id, visibility);
+
     await createSetup({
       ownerUserId: user.id,
       name,
       carId,
       trackId,
+      teamId: activeTeamId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
-      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
+      visibility,
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
@@ -193,7 +226,11 @@ export async function createSetupAction(formData: FormData) {
       tcSlipAngle,
       bestLapMs,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'team_visibility_requires_active_team') {
+      redirect(`${routes.setups}?error=team_visibility_requires_active_team`);
+    }
+
     redirect(`${routes.setups}?error=create_failed`);
   }
 
@@ -252,14 +289,18 @@ export async function updateSetupAction(formData: FormData) {
   }
 
   try {
+    const visibility = rawVisibility as Database['public']['Enums']['setup_visibility'];
+    const activeTeamId = await resolveActiveTeamIdForVisibility(user.id, visibility);
+
     await updateSetup({
       ownerUserId: user.id,
       setupId,
       name,
       carId,
       trackId,
+      teamId: activeTeamId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
-      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
+      visibility,
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
@@ -271,7 +312,11 @@ export async function updateSetupAction(formData: FormData) {
       tcSlipAngle,
       bestLapMs,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'team_visibility_requires_active_team') {
+      redirect(`${routes.setups}/${setupId}?error=team_visibility_requires_active_team`);
+    }
+
     redirect(`${routes.setups}/${setupId}?error=update_failed`);
   }
 
@@ -345,13 +390,17 @@ export async function duplicateSetupAction(formData: FormData) {
   let duplicatedSetupId = '';
 
   try {
+    const visibility = rawVisibility as Database['public']['Enums']['setup_visibility'];
+    const activeTeamId = await resolveActiveTeamIdForVisibility(user.id, visibility);
+
     duplicatedSetupId = await createSetup({
       ownerUserId: user.id,
       name,
       carId,
       trackId,
+      teamId: activeTeamId,
       setupType: rawSetupType as Database['public']['Enums']['setup_type'],
-      visibility: rawVisibility as Database['public']['Enums']['setup_visibility'],
+      visibility,
       notes,
       raceDurationMinutes,
       weatherSummary: rawWeatherSummary,
@@ -363,7 +412,15 @@ export async function duplicateSetupAction(formData: FormData) {
       tcSlipAngle,
       bestLapMs,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'team_visibility_requires_active_team') {
+      redirect(
+        returnTo && returnTo.startsWith(routes.setups)
+          ? `${returnTo}?error=team_visibility_requires_active_team`
+          : `${routes.setups}?error=team_visibility_requires_active_team`,
+      );
+    }
+
     redirect(
       returnTo && returnTo.startsWith(routes.setups)
         ? `${returnTo}?error=duplicate_failed`

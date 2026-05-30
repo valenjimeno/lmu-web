@@ -56,6 +56,8 @@ const fieldCardClassName =
 const errorMessages: Record<string, string> = {
   invalid_setup: 'Necesitamos un nombre valido, un tipo correcto y una visibilidad valida.',
   invalid_setup_values: 'Brake Bias, ABS y los controles de traccion deben ser numeros validos.',
+  team_visibility_requires_active_team:
+    'Para usar visibilidad de equipo necesitas tener un equipo activo seleccionado.',
   update_failed: 'No hemos podido guardar los cambios. Intentalo de nuevo en unos segundos.',
   duplicate_failed: 'No hemos podido crear la copia. Intentalo de nuevo en unos segundos.',
   import_invalid_xml: 'No hemos podido leer el XML. Revisa el fichero e inténtalo de nuevo.',
@@ -110,6 +112,14 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
   const feedbackTone = resolvedSearchParams.error ? 'text-[#f3b4aa]' : 'text-[#edd1a3]';
   const detailPath = `${routes.setups}/${setup.id}`;
   const favoriteReturnTo = isEditMode ? `${detailPath}?edit=1` : detailPath;
+  const setupAudienceLabel =
+    setup.visibility === 'team' && setup.teamId
+      ? `Compartido con equipo${appContext.profile?.activeTeamId === setup.teamId ? ' activo' : ''}`
+      : null;
+  const setupAudienceDetail =
+    setup.visibility === 'team' && setup.teamId
+      ? 'Visible para los miembros del equipo asociado.'
+      : null;
   const preferredDriverNames = buildPreferredDriverNames(
     appContext.preferredDriverName,
     appContext.profile?.nickname,
@@ -142,6 +152,10 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                 <div className="flex flex-wrap gap-2">
                   <SetupBadge tone="accent">{setup.setupType}</SetupBadge>
                   <SetupBadge>{formatSetupVisibility(setup.visibility)}</SetupBadge>
+                  {setupAudienceLabel ? (
+                    <SetupBadge tone="success">{setupAudienceLabel}</SetupBadge>
+                  ) : null}
+                  {setupAudienceDetail ? <SetupBadge>{setupAudienceDetail}</SetupBadge> : null}
                   <SetupBadge>{setup.carClassName}</SetupBadge>
                   <SetupBadge>{setup.manufacturerName}</SetupBadge>
                   {setup.isFavorite ? <SetupBadge tone="success">Favorite</SetupBadge> : null}
@@ -275,6 +289,9 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                         className={selectClassName}
                       >
                         <option value="private">{formatSetupVisibility('private')}</option>
+                        {appContext.profile?.activeTeamId ? (
+                          <option value="team">{formatSetupVisibility('team')}</option>
+                        ) : null}
                         <option value="public">{formatSetupVisibility('public')}</option>
                       </select>
                     </label>

@@ -1,12 +1,12 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/features/auth/login-form';
-import { routes } from '@/lib/constants/routes';
-import { getCurrentUser } from '@/lib/supabase/auth';
+import { authRedirectParam, getCurrentUser, resolvePostLoginRedirect } from '@/lib/supabase/auth';
 
 type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
+    redirectTo?: string;
   }>;
 };
 
@@ -25,9 +25,10 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
 
 async function LoginPageContent({ searchParams }: LoginPageProps) {
   const [user, resolvedSearchParams] = await Promise.all([getCurrentUser(), searchParams]);
+  const redirectTo = resolvePostLoginRedirect(resolvedSearchParams.redirectTo);
 
   if (user) {
-    redirect(routes.setups);
+    redirect(redirectTo);
   }
 
   const errorMessage = resolvedSearchParams.error
@@ -51,7 +52,11 @@ async function LoginPageContent({ searchParams }: LoginPageProps) {
         </div>
 
         <div className="mt-8 rounded-[1.4rem] border border-white/8 bg-white/[0.025] p-5 sm:p-6">
-          <LoginForm errorMessage={errorMessage} />
+          <LoginForm
+            errorMessage={errorMessage}
+            redirectTo={redirectTo}
+            redirectToFieldName={authRedirectParam}
+          />
         </div>
       </section>
     </main>

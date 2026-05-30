@@ -56,7 +56,30 @@ type SetupsConsoleProps = {
   feedbackMessage?: string;
   feedbackTone?: string;
   preferredDriverName?: string;
+  activeTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
 };
+
+function resolveSetupAudience(
+  setup: SetupSummary,
+  activeTeam?: { id: string; name: string; slug: string } | null,
+) {
+  if (setup.visibility === 'team' && setup.teamId) {
+    return {
+      badge: 'Compartido con equipo',
+      tone: 'success' as const,
+      detail:
+        activeTeam && activeTeam.id === setup.teamId
+          ? `Visible para ${activeTeam.name}`
+          : 'Visible para tu equipo activo',
+    };
+  }
+
+  return null;
+}
 
 export function SetupsConsole({
   carClasses,
@@ -71,6 +94,7 @@ export function SetupsConsole({
   feedbackMessage,
   feedbackTone,
   preferredDriverName,
+  activeTeam,
 }: SetupsConsoleProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -317,6 +341,7 @@ export function SetupsConsole({
                 cars={cars}
                 tracks={tracks}
                 defaultCarClassId={defaultCarClassId}
+                activeTeam={activeTeam}
                 triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
               />
             </div>
@@ -602,6 +627,7 @@ export function SetupsConsole({
               <div className="divide-y divide-white/8">
                 {setups.map((setup) => {
                   const isSelected = setup.id === selectedSetup?.id;
+                  const audience = resolveSetupAudience(setup, activeTeam);
 
                   return (
                     <article
@@ -634,6 +660,16 @@ export function SetupsConsole({
                           <p className="block truncate text-base font-medium text-white">
                             {setup.name}
                           </p>
+                          {audience ? (
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <SetupBadge tone={audience.tone} className="px-2.5 py-0.5 text-[9px]">
+                                {audience.badge}
+                              </SetupBadge>
+                              <span className="truncate text-xs text-white/50">
+                                {audience.detail}
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -719,6 +755,7 @@ export function SetupsConsole({
             tracks={tracks}
             defaultCarClassId={defaultCarClassId}
             preferredDriverName={preferredDriverName}
+            activeTeam={activeTeam}
             onClose={undefined}
           />
         </div>
@@ -742,6 +779,7 @@ export function SetupsConsole({
                     tracks={tracks}
                     defaultCarClassId={defaultCarClassId}
                     preferredDriverName={preferredDriverName}
+                    activeTeam={activeTeam}
                     onClose={() => setMobileInsightsOpen(false)}
                     mobile
                   />
@@ -770,6 +808,7 @@ function InsightsPanel({
   tracks,
   defaultCarClassId,
   preferredDriverName,
+  activeTeam,
   onClose,
   mobile = false,
 }: {
@@ -779,6 +818,11 @@ function InsightsPanel({
   tracks: Option[];
   defaultCarClassId?: string;
   preferredDriverName?: string;
+  activeTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   onClose?: () => void;
   mobile?: boolean;
 }) {
@@ -816,6 +860,14 @@ function InsightsPanel({
         <div className="space-y-4 px-4 py-4">
           <div className="rounded-md border border-white/8 px-4 py-4">
             <p className="line-clamp-2 text-base font-medium leading-6 text-white">{setup.name}</p>
+            {resolveSetupAudience(setup, activeTeam) ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SetupBadge tone={resolveSetupAudience(setup, activeTeam)?.tone}>
+                  {resolveSetupAudience(setup, activeTeam)?.badge}
+                </SetupBadge>
+                <SetupBadge>{resolveSetupAudience(setup, activeTeam)?.detail}</SetupBadge>
+              </div>
+            ) : null}
             <div className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
@@ -866,6 +918,7 @@ function InsightsPanel({
               cars={cars}
               tracks={tracks}
               defaultCarClassId={defaultCarClassId}
+              activeTeam={activeTeam}
               setup={setup}
               preferredDriverName={preferredDriverName}
               triggerClassName="inline-flex min-h-11 w-full items-center justify-center rounded-[0.95rem] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/82 transition hover:bg-white/[0.08]"

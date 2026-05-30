@@ -3,6 +3,7 @@ import { SetupsConsole } from '@/components/features/setups/setups-console';
 import { routes } from '@/lib/constants/routes';
 import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getSetupPageData } from '@/services/setup.service';
+import { getUserTeams } from '@/services/team.service';
 import type { Database } from '@/types/database.types';
 
 type SetupsPageProps = {
@@ -35,6 +36,8 @@ const errorMessages: Record<string, string> = {
   import_duplicate_session:
     'Este XML ya estaba importado como sesión. No se puede subir la misma sesión más de una vez.',
   import_failed: 'No hemos podido importar la sesión. Inténtalo de nuevo en unos segundos.',
+  team_visibility_requires_active_team:
+    'Para guardar un setup de equipo necesitas tener un equipo activo seleccionado.',
 };
 
 const SETUPS_PAGE_SIZE = 6;
@@ -76,6 +79,8 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
     page: currentPage,
     pageSize: SETUPS_PAGE_SIZE,
   });
+  const teams = await getUserTeams(appContext.user.id);
+  const activeTeam = teams.find((team) => team.id === appContext.profile?.activeTeamId) ?? null;
 
   const feedbackMessage = resolvedSearchParams.created
     ? 'Setup creado correctamente.'
@@ -109,6 +114,9 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
       feedbackMessage={feedbackMessageWithDebug}
       feedbackTone={feedbackTone}
       preferredDriverName={appContext.preferredDriverName}
+      activeTeam={
+        activeTeam ? { id: activeTeam.id, name: activeTeam.name, slug: activeTeam.slug } : null
+      }
     />
   );
 }

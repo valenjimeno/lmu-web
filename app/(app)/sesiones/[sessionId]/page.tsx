@@ -55,15 +55,6 @@ function formatPercentageRange(minValue: number | null, maxValue: number | null,
   return `${formatPercentage(minValue, decimals)} - ${formatPercentage(maxValue, decimals)}`;
 }
 
-function formatLapDelta(value: number | null) {
-  if (value === null) {
-    return 'No definido';
-  }
-
-  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-  return `${sign}${formatLapTime(Math.abs(value))}`;
-}
-
 function formatSessionDuration(value: number | null) {
   if (value === null) {
     return 'No definido';
@@ -177,14 +168,6 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
     notFound();
   }
 
-  const positionDeltaTone =
-    session.positionGain === null
-      ? 'text-white/78'
-      : session.positionGain > 0
-        ? 'text-emerald-300'
-        : session.positionGain < 0
-          ? 'text-[#f3b4aa]'
-          : 'text-white/78';
   const bestSector1Ms = session.laps.reduce<number | null>((best, lap) => {
     if (lap.sector1Ms === null || lap.sector1Ms <= 0) {
       return best;
@@ -261,7 +244,7 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                 <SessionMetricCard
                   label="Ritmo medio"
                   value={formatLapTime(session.averageLapMs)}
-                  helpText="Promedio de vueltas válidas fuera de pit."
+                  helpText="Promedio de todas las vueltas con tiempo, excepto la primera."
                 />
               </div>
             </div>
@@ -360,18 +343,6 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                     session.virtualEnergyMaxPerLap,
                     1,
                   )}
-                />
-                <SessionDataLine
-                  label="VE 20 min"
-                  value={formatPercentage(session.projectedVirtualEnergy20Minutes, 1)}
-                />
-                <SessionDataLine
-                  label="VE 30 min"
-                  value={formatPercentage(session.projectedVirtualEnergy30Minutes, 1)}
-                />
-                <SessionDataLine
-                  label="VE 45 min"
-                  value={formatPercentage(session.projectedVirtualEnergy45Minutes, 1)}
                 />
                 <SessionDataLine
                   label="Deg. front/lap"
