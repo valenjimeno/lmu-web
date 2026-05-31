@@ -7,6 +7,35 @@ import {
 
 export const maxDuration = 300;
 
+function serializeRouteError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+
+    return {
+      code: typeof candidate.code === 'string' ? candidate.code : null,
+      message: typeof candidate.message === 'string' ? candidate.message : 'processing_failed',
+      details: typeof candidate.details === 'string' ? candidate.details : null,
+      hint: typeof candidate.hint === 'string' ? candidate.hint : null,
+    };
+  }
+
+  return {
+    code: null,
+    message: String(error),
+    details: null,
+    hint: null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
 
@@ -40,6 +69,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    console.error('session import job processing failed', {
+      jobId,
+      ownerUserId: user.id,
+      error: serializeRouteError(error),
+    });
+
     try {
       await recoverSessionImportJob({
         ownerUserId: user.id,
@@ -53,7 +88,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const message = error instanceof Error ? error.message : 'processing_failed';
+    const serializedError = serializeRouteError(error);
+    const message = typeof serializedError === 'string' ? serializedError : serializedError.message;
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

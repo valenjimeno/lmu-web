@@ -75,7 +75,7 @@ export type SessionImportJobSummary = {
 };
 
 const sessionImportJobSelect =
-  'id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at, last_activity_at, notification_status, notification_payload, notified_at';
+  'id, owner_user_id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at, last_activity_at, notification_status, notification_payload, notified_at';
 
 const invalidImportErrorCodes = new Set([
   'empty_xml',
