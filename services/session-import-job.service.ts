@@ -75,7 +75,7 @@ export type SessionImportJobSummary = {
 };
 
 const sessionImportJobSelect =
-  'id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at, notification_status, notification_payload, notified_at';
+  'id, status, session_type_filter, total_count, queued_count, processing_count, completed_count, failed_count, duplicate_count, invalid_count, filtered_count, created_at, started_at, completed_at, last_activity_at, notification_status, notification_payload, notified_at';
 
 const invalidImportErrorCodes = new Set([
   'empty_xml',
@@ -93,9 +93,11 @@ const terminalImportErrorCodes = new Set([
   'no_valid_laps',
   'filtered_session_type',
   'missing_storage_source',
+  'retry_exhausted',
 ]);
 
 const STALE_SESSION_IMPORT_JOB_THRESHOLD_MS = 15 * 60 * 1000;
+const MAX_SESSION_IMPORT_ITEM_ATTEMPTS = 3;
 
 function buildNotificationPayload(job: SessionImportJobRow) {
   const title =
@@ -215,12 +217,92 @@ async function markSessionImportJobAsAbandoned(ownerUserId: string, jobId: strin
   return refreshSessionImportJobCounters(ownerUserId, jobId);
 }
 
+async function requeueSessionImportJobProcessingItems(ownerUserId: string, jobId: string) {
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const itemsResult = await supabase
+    .from('session_import_job_items')
+    .select('id, attempt_count')
+    .eq('owner_user_id', ownerUserId)
+    .eq('job_id', jobId)
+    .eq('status', 'processing');
+
+  if (itemsResult.error) {
+    throw itemsResult.error;
+  }
+
+  const processingItems = (itemsResult.data ?? []) as Array<
+    Pick<SessionImportJobItemRow, 'id' | 'attempt_count'>
+  >;
+  const requeueItemIds = processingItems
+    .filter((item) => item.attempt_count < MAX_SESSION_IMPORT_ITEM_ATTEMPTS)
+    .map((item) => item.id);
+  const exhaustedItemIds = processingItems
+    .filter((item) => item.attempt_count >= MAX_SESSION_IMPORT_ITEM_ATTEMPTS)
+    .map((item) => item.id);
+
+  if (requeueItemIds.length > 0) {
+    const requeueResult = await supabase
+      .from('session_import_job_items')
+      .update({
+        status: 'queued',
+        error_code: null,
+        error_message: null,
+        processed_at: null,
+        last_activity_at: now,
+      })
+      .eq('owner_user_id', ownerUserId)
+      .eq('job_id', jobId)
+      .in('id', requeueItemIds);
+
+    if (requeueResult.error) {
+      throw requeueResult.error;
+    }
+  }
+
+  if (exhaustedItemIds.length > 0) {
+    const exhaustedResult = await supabase
+      .from('session_import_job_items')
+      .update({
+        status: 'failed',
+        error_code: 'retry_exhausted',
+        error_message: 'The import item exceeded the maximum retry attempts.',
+        processed_at: now,
+        last_activity_at: now,
+      })
+      .eq('owner_user_id', ownerUserId)
+      .eq('job_id', jobId)
+      .in('id', exhaustedItemIds);
+
+    if (exhaustedResult.error) {
+      throw exhaustedResult.error;
+    }
+  }
+
+  const jobResult = await supabase
+    .from('session_import_jobs')
+    .update({
+      status: requeueItemIds.length > 0 ? 'queued' : 'failed',
+      last_activity_at: now,
+      notification_status: 'pending',
+      completed_at: null,
+    })
+    .eq('owner_user_id', ownerUserId)
+    .eq('id', jobId);
+
+  if (jobResult.error) {
+    throw jobResult.error;
+  }
+
+  return refreshSessionImportJobCounters(ownerUserId, jobId);
+}
+
 function isSessionImportJobStale(job: SessionImportJobRow) {
   if (job.status !== 'queued' && job.status !== 'processing') {
     return false;
   }
 
-  const activityTimestamp = Date.parse(job.started_at ?? job.created_at);
+  const activityTimestamp = Date.parse(job.last_activity_at ?? job.started_at ?? job.created_at);
 
   if (Number.isNaN(activityTimestamp)) {
     return false;
@@ -298,6 +380,7 @@ async function persistSessionImportJobCounters(job: SessionImportJobRow) {
       filtered_count: job.filtered_count,
       started_at: job.started_at,
       completed_at: job.completed_at,
+      last_activity_at: job.last_activity_at,
       notification_status: job.notification_status,
       notification_payload: buildNotificationPayload(job),
     })
@@ -408,6 +491,7 @@ async function refreshSessionImportJobCounters(ownerUserId: string, jobId: strin
       job.started_at ??
       (nextStatus === 'processing' || isFinished ? new Date().toISOString() : null),
     completed_at: isFinished ? new Date().toISOString() : null,
+    last_activity_at: new Date().toISOString(),
     notification_status: isFinished ? 'ready' : 'pending',
   });
 
@@ -457,6 +541,7 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
     duplicate_count: 0,
     invalid_count: 0,
     filtered_count: 0,
+    last_activity_at: new Date().toISOString(),
     notification_status: 'pending',
     notification_payload: {
       title: 'Importacion de sesiones en cola',
@@ -481,6 +566,7 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
     job_id: job.id,
     owner_user_id: input.ownerUserId,
     status: 'queued',
+    attempt_count: 0,
     session_name: session.sessionName,
     source_file_name: session.sourceFileName,
     source_file_hash: session.sourceFileHash,
@@ -488,6 +574,7 @@ export async function createSessionImportJob(input: CreateSessionImportJobInput)
     source_mime_type: session.sourceMimeType,
     storage_bucket: session.storageBucket,
     storage_path: session.storagePath,
+    last_activity_at: new Date().toISOString(),
     xml_content: null,
     driver_name: session.driverName,
     detected_session_type: session.detectedSessionType,
@@ -532,7 +619,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
   const itemsResult = await supabase
     .from('session_import_job_items')
     .select(
-      'id, session_name, source_file_name, source_file_hash, storage_bucket, storage_path, driver_name',
+      'id, session_name, source_file_name, source_file_hash, storage_bucket, storage_path, driver_name, attempt_count',
     )
     .eq('owner_user_id', input.ownerUserId)
     .eq('job_id', input.jobId)
@@ -591,6 +678,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
       {
         ...job,
         started_at: job.started_at ?? now,
+        last_activity_at: now,
       },
       counterDelta,
     ),
@@ -601,6 +689,26 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
 
   for (const item of items) {
     try {
+      const nextAttemptCount = (item.attempt_count ?? 0) + 1;
+
+      if (nextAttemptCount > MAX_SESSION_IMPORT_ITEM_ATTEMPTS) {
+        throw new Error('retry_exhausted');
+      }
+
+      const claimResult = await supabase
+        .from('session_import_job_items')
+        .update({
+          attempt_count: nextAttemptCount,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq('owner_user_id', input.ownerUserId)
+        .eq('job_id', input.jobId)
+        .eq('id', item.id);
+
+      if (claimResult.error) {
+        throw claimResult.error;
+      }
+
       if (!item.storage_bucket || !item.storage_path) {
         throw new Error('missing_storage_source');
       }
@@ -623,6 +731,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
             status: 'failed',
             error_code: 'filtered_session_type',
             error_message: 'The XML session type does not match the job filter.',
+            last_activity_at: new Date().toISOString(),
             processed_at: new Date().toISOString(),
           })
           .eq('owner_user_id', input.ownerUserId)
@@ -660,6 +769,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
           imported_session_id: importResult.sessionId,
           error_code: null,
           error_message: null,
+          last_activity_at: new Date().toISOString(),
           processed_at: new Date().toISOString(),
         })
         .eq('owner_user_id', input.ownerUserId)
@@ -687,6 +797,7 @@ export async function processSessionImportJob(input: ProcessSessionImportJobInpu
           status: 'failed',
           error_code: errorCode,
           error_message: errorMessage.slice(0, 500),
+          last_activity_at: new Date().toISOString(),
           processed_at: new Date().toISOString(),
         })
         .eq('owner_user_id', input.ownerUserId)
@@ -809,6 +920,11 @@ export async function getRecentSessionImportJobs(ownerUserId: string, limit = 6)
               return currentJob ?? job;
             }
 
+            if (currentJob.processing_count > 0) {
+              await requeueSessionImportJobProcessingItems(ownerUserId, currentJob.id);
+              return (await getSessionImportJobRow(ownerUserId, currentJob.id)) ?? currentJob;
+            }
+
             await markSessionImportJobAsAbandoned(ownerUserId, currentJob.id);
             return (await getSessionImportJobRow(ownerUserId, currentJob.id)) ?? currentJob;
           })
@@ -817,4 +933,8 @@ export async function getRecentSessionImportJobs(ownerUserId: string, limit = 6)
   );
 
   return refreshedJobs.filter(Boolean).map((job) => mapJobRowToSummary(job as SessionImportJobRow));
+}
+
+export async function recoverSessionImportJob(input: { ownerUserId: string; jobId: string }) {
+  return requeueSessionImportJobProcessingItems(input.ownerUserId, input.jobId);
 }

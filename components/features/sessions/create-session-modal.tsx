@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
+import type { LatestImportedSessionReference } from '@/services/session.service';
 
 type CreateSessionModalProps = {
   preferredDriverName?: string;
+  latestImportedSessionReference: LatestImportedSessionReference | null;
   triggerClassName?: string;
   onJobCreated?: (job: SessionImportJobSummary) => void;
   canBulkImportSessions: boolean;
@@ -17,6 +19,7 @@ type CreateSessionModalProps = {
 
 export function CreateSessionModal({
   preferredDriverName,
+  latestImportedSessionReference,
   triggerClassName,
   onJobCreated,
   canBulkImportSessions,
@@ -87,6 +90,7 @@ export function CreateSessionModal({
             <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
               <ImportSessionsForm
                 preferredDriverNames={preferredDriverName ? [preferredDriverName] : []}
+                latestImportedSessionReference={latestImportedSessionReference}
                 returnTo={routes.sessions}
                 submitLabel="Importar sesiones"
                 canBulkImportSessions={canBulkImportSessions}

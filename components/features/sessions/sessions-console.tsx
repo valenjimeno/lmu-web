@@ -10,7 +10,7 @@ import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
-import type { SessionSummary } from '@/services/session.service';
+import type { LatestImportedSessionReference, SessionSummary } from '@/services/session.service';
 
 type Option = {
   id: string;
@@ -43,6 +43,7 @@ type SessionsConsoleProps = {
   feedbackMessage?: string;
   feedbackTone?: string;
   preferredDriverName?: string;
+  latestImportedSessionReference: LatestImportedSessionReference | null;
   importJobs: SessionImportJobSummary[];
   canBulkImportSessions: boolean;
   currentPlan: 'lite' | 'pro';
@@ -121,6 +122,7 @@ export function SessionsConsole({
   feedbackMessage,
   feedbackTone,
   preferredDriverName,
+  latestImportedSessionReference,
   importJobs,
   canBulkImportSessions,
   currentPlan,
@@ -453,6 +455,7 @@ export function SessionsConsole({
             </div>
             <CreateSessionModal
               preferredDriverName={preferredDriverName}
+              latestImportedSessionReference={latestImportedSessionReference}
               canBulkImportSessions={canBulkImportSessions}
               currentPlan={currentPlan}
               onJobCreated={(job) => {
@@ -544,10 +547,6 @@ export function SessionsConsole({
                           {session.driverName} ·{' '}
                           {formatDate(session.sessionDateTime ?? session.importedAt)}
                         </p>
-                      </div>
-
-                      <div className="flex items-start justify-end gap-2 lg:hidden">
-                        {session.bestLapMs !== null ? <SubtleTag>Con vuelta</SubtleTag> : null}
                       </div>
 
                       <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 lg:contents">

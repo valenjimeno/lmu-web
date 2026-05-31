@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import {
   computeXmlHash,
   extractDriverNamesWithValidLaps,
+  extractSessionDateTime,
   findPreferredDriverName,
   type MatchState,
 } from '@/components/features/sessions/import-session-client';
@@ -19,9 +20,11 @@ import {
   type SessionTypeFilter,
 } from '@/lib/utils/session-type';
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
+import type { LatestImportedSessionReference } from '@/services/session.service';
 
 type ImportSessionsFormProps = {
   preferredDriverNames: string[];
+  latestImportedSessionReference: LatestImportedSessionReference | null;
   returnTo?: string;
   submitLabel?: string;
   onJobCreated?: (job: SessionImportJobSummary) => void;
@@ -33,6 +36,7 @@ type SessionImportEntry = {
   id: string;
   file: File;
   sessionName: string;
+  sessionDateTime: string | null;
   sourceFileName: string;
   sourceFileSizeBytes: number;
   sourceMimeType: string | null;
@@ -66,9 +70,11 @@ const inputClassName =
 function ImportSessionsPendingState({
   isSubmitting,
   message,
+  latestUploadedFileName,
 }: {
   isSubmitting: boolean;
   message: string;
+  latestUploadedFileName: string | null;
 }) {
   if (!isSubmitting) {
     return null;
@@ -82,6 +88,12 @@ function ImportSessionsPendingState({
         </div>
         <h3 className="mt-5 text-lg font-semibold text-white">Importando sesiones</h3>
         <p className="mt-2 text-sm leading-6 text-white/72">{message}</p>
+        {latestUploadedFileName ? (
+          <p className="mt-3 text-xs leading-5 text-white/56">
+            Sesion mas reciente del lote:{' '}
+            <span className="font-medium text-white/80">{latestUploadedFileName}</span>
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -107,7 +119,9 @@ function ImportSessionsFormBody({
   sessionTypeFilter,
   setSessionTypeFilter,
   preferredDriverSummary,
+  latestImportedSessionReference,
   entries,
+  mostRecentSelectedFileName,
   handleFileChange,
   handleDriverChange,
   canSubmit,
@@ -119,7 +133,9 @@ function ImportSessionsFormBody({
   sessionTypeFilter: SessionTypeFilter;
   setSessionTypeFilter: (value: SessionTypeFilter) => void;
   preferredDriverSummary: string;
+  latestImportedSessionReference: LatestImportedSessionReference | null;
   entries: SessionImportEntry[];
+  mostRecentSelectedFileName: string | null;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   handleDriverChange: (entryId: string, value: string) => void;
   canSubmit: boolean;
@@ -173,6 +189,20 @@ function ImportSessionsFormBody({
           ? `Puedes seleccionar varios XML de una vez. Intentaremos encontrar automáticamente tu piloto usando: ${preferredDriverSummary}`
           : `El plan ${currentPlan === 'lite' ? 'Lite' : 'actual'} solo permite seleccionar un XML por importación. Intentaremos encontrar automáticamente tu piloto usando: ${preferredDriverSummary}`}
       </p>
+
+      {latestImportedSessionReference?.sourceFileName ? (
+        <div className="rounded-[1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/72">
+          <span className="font-semibold text-white">Ultimo fichero importado</span>:{' '}
+          {latestImportedSessionReference.sourceFileName}
+        </div>
+      ) : null}
+
+      {mostRecentSelectedFileName ? (
+        <div className="rounded-[1rem] border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.08)] px-4 py-3 text-sm text-[#f5d4aa]">
+          <span className="font-semibold">Sesion mas reciente detectada</span>:{' '}
+          {mostRecentSelectedFileName}
+        </div>
+      ) : null}
 
       {entries.length > 0 ? (
         <div className="space-y-3 rounded-[1rem] border border-white/10 bg-white/[0.03] p-4">
@@ -267,6 +297,46 @@ function getDefaultSessionName(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || fileName;
 }
 
+function findMostRecentEntry(
+  entries: Array<Pick<SessionImportEntry, 'sourceFileName' | 'sessionDateTime'>>,
+) {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return entries.reduce<Pick<SessionImportEntry, 'sourceFileName' | 'sessionDateTime'> | null>(
+    (latest, entry) => {
+      if (!latest) {
+        return entry;
+      }
+
+      const latestTimestamp = latest.sessionDateTime
+        ? Date.parse(latest.sessionDateTime)
+        : Number.NEGATIVE_INFINITY;
+      const entryTimestamp = entry.sessionDateTime
+        ? Date.parse(entry.sessionDateTime)
+        : Number.NEGATIVE_INFINITY;
+
+      if (entryTimestamp > latestTimestamp) {
+        return entry;
+      }
+
+      return latest;
+    },
+    null,
+  );
+}
+
+function findMostRecentSourceFileName(
+  entries: Array<Pick<SessionImportEntry, 'sourceFileName' | 'sessionDateTime'>>,
+) {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return findMostRecentEntry(entries)?.sourceFileName ?? null;
+}
+
 function chunkEntries<T>(entries: T[], chunkSize: number) {
   const chunks: T[][] = [];
 
@@ -320,6 +390,7 @@ async function buildImportEntry(
     id: buildEntryId(file.name, xmlHash, index),
     file,
     sessionName: getDefaultSessionName(file.name),
+    sessionDateTime: extractSessionDateTime(xmlContent),
     sourceFileName: file.name,
     sourceFileSizeBytes: file.size,
     sourceMimeType: file.type || null,
@@ -355,6 +426,7 @@ async function removeUploadedSources(uploadedSources: UploadedSessionImportSourc
 
 export function ImportSessionsForm({
   preferredDriverNames,
+  latestImportedSessionReference,
   returnTo,
   submitLabel = 'Importar sesiones',
   onJobCreated,
@@ -368,6 +440,7 @@ export function ImportSessionsForm({
   const [pendingMessage, setPendingMessage] = useState(
     'Estamos preparando la importación en segundo plano.',
   );
+  const [latestUploadedFileName, setLatestUploadedFileName] = useState<string | null>(null);
 
   const entries = useMemo(
     () =>
@@ -387,6 +460,11 @@ export function ImportSessionsForm({
       ? normalizedNames.join(' · ')
       : 'No hemos podido resolver tu nombre completo desde el perfil.';
   }, [preferredDriverNames]);
+
+  const mostRecentSelectedFileName = useMemo(
+    () => findMostRecentSourceFileName(allEntries),
+    [allEntries],
+  );
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
@@ -482,6 +560,7 @@ export function ImportSessionsForm({
       );
 
       uploadedSources.push(...uploadedBatch);
+      setLatestUploadedFileName(findMostRecentSourceFileName(sourceEntries));
       setPendingMessage(
         `Hemos subido ${uploadedSources.length} de ${sourceEntries.length} XML al almacenamiento seguro. Ahora seguiremos en segundo plano.`,
       );
@@ -499,6 +578,7 @@ export function ImportSessionsForm({
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setLatestUploadedFileName(null);
     setPendingMessage('Subiendo XML al almacenamiento seguro para procesarlos totalmente en back.');
 
     const supabase = createClient();
@@ -577,7 +657,11 @@ export function ImportSessionsForm({
 
   return (
     <form onSubmit={handleSubmit} className="relative space-y-4">
-      <ImportSessionsPendingState isSubmitting={isSubmitting} message={pendingMessage} />
+      <ImportSessionsPendingState
+        isSubmitting={isSubmitting}
+        message={pendingMessage}
+        latestUploadedFileName={latestUploadedFileName}
+      />
       <input type="hidden" name="returnTo" value={returnTo ?? '/sesiones'} />
       {submitError ? (
         <div className="rounded-[1rem] border border-[#ff6b5730] bg-[#ff6b570a] px-4 py-3 text-sm text-[#f3b4aa]">
@@ -588,7 +672,9 @@ export function ImportSessionsForm({
         sessionTypeFilter={sessionTypeFilter}
         setSessionTypeFilter={setSessionTypeFilter}
         preferredDriverSummary={preferredDriverSummary}
+        latestImportedSessionReference={latestImportedSessionReference}
         entries={entries}
+        mostRecentSelectedFileName={mostRecentSelectedFileName}
         handleFileChange={handleFileChange}
         handleDriverChange={handleDriverChange}
         canSubmit={canSubmit}

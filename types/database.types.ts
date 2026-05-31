@@ -218,6 +218,7 @@ export type Database = {
       };
       session_import_job_items: {
         Row: {
+          attempt_count: number;
           created_at: string;
           detected_session_type: string | null;
           driver_name: string;
@@ -226,6 +227,7 @@ export type Database = {
           id: string;
           imported_session_id: string | null;
           job_id: string;
+          last_activity_at: string;
           owner_user_id: string;
           processed_at: string | null;
           session_name: string;
@@ -239,6 +241,7 @@ export type Database = {
           xml_content: string | null;
         };
         Insert: {
+          attempt_count?: number;
           created_at?: string;
           detected_session_type?: string | null;
           driver_name: string;
@@ -247,6 +250,7 @@ export type Database = {
           id?: string;
           imported_session_id?: string | null;
           job_id: string;
+          last_activity_at?: string;
           owner_user_id: string;
           processed_at?: string | null;
           session_name: string;
@@ -260,6 +264,7 @@ export type Database = {
           xml_content?: string | null;
         };
         Update: {
+          attempt_count?: number;
           created_at?: string;
           detected_session_type?: string | null;
           driver_name?: string;
@@ -268,6 +273,7 @@ export type Database = {
           id?: string;
           imported_session_id?: string | null;
           job_id?: string;
+          last_activity_at?: string;
           owner_user_id?: string;
           processed_at?: string | null;
           session_name?: string;
@@ -307,6 +313,7 @@ export type Database = {
           filtered_count: number;
           id: string;
           invalid_count: number;
+          last_activity_at: string;
           notification_payload: Json;
           notification_status: string;
           notified_at: string | null;
@@ -327,6 +334,7 @@ export type Database = {
           filtered_count?: number;
           id?: string;
           invalid_count?: number;
+          last_activity_at?: string;
           notification_payload?: Json;
           notification_status?: string;
           notified_at?: string | null;
@@ -347,6 +355,7 @@ export type Database = {
           filtered_count?: number;
           id?: string;
           invalid_count?: number;
+          last_activity_at?: string;
           notification_payload?: Json;
           notification_status?: string;
           notified_at?: string | null;

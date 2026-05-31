@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/supabase/auth';
-import { drainSessionImportJob } from '@/services/session-import-job.service';
+import {
+  drainSessionImportJob,
+  recoverSessionImportJob,
+} from '@/services/session-import-job.service';
 
 export const maxDuration = 300;
 
@@ -37,6 +40,19 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    try {
+      await recoverSessionImportJob({
+        ownerUserId: user.id,
+        jobId,
+      });
+    } catch (recoveryError) {
+      console.error('session import job recovery failed', {
+        jobId,
+        ownerUserId: user.id,
+        recoveryError,
+      });
+    }
+
     const message = error instanceof Error ? error.message : 'processing_failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }

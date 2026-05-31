@@ -5,7 +5,6 @@ import type { SessionTypeFilter } from '@/lib/utils/session-type';
 import { getUserEntitlements } from '@/services/entitlement.service';
 import {
   createSessionImportJob,
-  drainSessionImportJob,
   getRecentSessionImportJobs,
   isMissingSessionImportJobsTableError,
 } from '@/services/session-import-job.service';
@@ -70,6 +69,8 @@ export async function POST(request: NextRequest) {
 
   const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
   const entitlements = await getUserEntitlements(user.id);
+  const processUrl = new URL('/api/session-import-jobs/process', request.url);
+  const requestCookie = request.headers.get('cookie');
 
   if (sessions.length > 1 && !entitlements.canBulkImportSessions) {
     return NextResponse.json({ error: 'bulk_import_requires_pro' }, { status: 403 });
@@ -96,12 +97,35 @@ export async function POST(request: NextRequest) {
     });
 
     after(async () => {
-      await drainSessionImportJob({
-        ownerUserId: user.id,
-        jobId: job.id,
-        chunkSize: 10,
-        maxIterations: 25,
-      });
+      try {
+        const response = await fetch(processUrl, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(requestCookie ? { cookie: requestCookie } : {}),
+          },
+          body: JSON.stringify({
+            jobId: job.id,
+          }),
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('session import job background trigger failed', {
+            jobId: job.id,
+            ownerUserId: user.id,
+            status: response.status,
+            body: errorText.slice(0, 500),
+          });
+        }
+      } catch (error) {
+        console.error('session import job background trigger threw', {
+          jobId: job.id,
+          ownerUserId: user.id,
+          error,
+        });
+      }
     });
 
     return NextResponse.json({ job }, { status: 202 });

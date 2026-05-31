@@ -3,7 +3,7 @@ import { SessionsConsole } from '@/components/features/sessions/sessions-console
 import { routes } from '@/lib/constants/routes';
 import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getRecentSessionImportJobs } from '@/services/session-import-job.service';
-import { getSessionPageData } from '@/services/session.service';
+import { getLatestImportedSessionReference, getSessionPageData } from '@/services/session.service';
 
 type SessionsPageProps = {
   searchParams: Promise<{
@@ -45,7 +45,10 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
     redirect(routes.login);
   }
 
-  const importJobs = await getRecentSessionImportJobs(appContext.user.id);
+  const [importJobs, latestImportedSessionReference] = await Promise.all([
+    getRecentSessionImportJobs(appContext.user.id),
+    getLatestImportedSessionReference(appContext.user.id),
+  ]);
 
   const currentPage = Math.max(1, Number.parseInt(resolvedSearchParams.page ?? '1', 10) || 1);
   const filters = {
@@ -109,6 +112,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
       feedbackMessage={feedbackMessageWithDebug}
       feedbackTone={feedbackTone}
       preferredDriverName={appContext.preferredDriverName}
+      latestImportedSessionReference={latestImportedSessionReference}
       importJobs={importJobs}
       canBulkImportSessions={appContext.entitlements.canBulkImportSessions}
       currentPlan={appContext.entitlements.plan}

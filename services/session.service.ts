@@ -271,6 +271,12 @@ export type SessionFilters = {
   trackId?: string;
 };
 
+export type LatestImportedSessionReference = {
+  sourceFileName: string | null;
+  sessionDateTime: string | null;
+  importedAt: string;
+};
+
 type GetSessionPageDataOptions = {
   page?: number;
   pageSize?: number;
@@ -919,6 +925,35 @@ export async function getImportedSessionHashes(userId: string) {
   return (result.data ?? [])
     .map((session) => session.source_file_hash)
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+export async function getLatestImportedSessionReference(
+  userId: string,
+): Promise<LatestImportedSessionReference | null> {
+  const supabase = await createClient();
+  const result = await supabase
+    .from('setup_sessions')
+    .select('source_file_name, session_datetime, imported_at')
+    .eq('owner_user_id', userId)
+    .not('source_file_name', 'is', null)
+    .order('session_datetime', { ascending: false, nullsFirst: false })
+    .order('imported_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (!result.data) {
+    return null;
+  }
+
+  return {
+    sourceFileName: result.data.source_file_name,
+    sessionDateTime: result.data.session_datetime,
+    importedAt: result.data.imported_at,
+  };
 }
 
 export async function getSessionDetail(userId: string, sessionId: string) {

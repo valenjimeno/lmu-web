@@ -92,3 +92,30 @@ export async function computeXmlHash(xmlContent: string) {
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 }
+
+export function extractSessionDateTime(xmlContent: string) {
+  const timeStringMatch = xmlContent.match(/<TimeString>([\s\S]*?)<\/TimeString>/i);
+  const timeString = timeStringMatch?.[1]?.trim();
+
+  if (!timeString) {
+    return null;
+  }
+
+  const match = timeString.match(/^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  const timestamp = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
