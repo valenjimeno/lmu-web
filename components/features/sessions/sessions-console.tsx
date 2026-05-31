@@ -516,9 +516,9 @@ export function SessionsConsole({
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-[minmax(0,2fr)_1.35fr_1.2fr_0.9fr_1.1fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+              <div className="hidden grid-cols-[minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
                 <span>Sesión</span>
-                <span>Piloto</span>
+                <span>Circuito</span>
                 <span>Coche</span>
                 <span>Mejor vuelta</span>
                 <span>Fecha</span>
@@ -532,7 +532,7 @@ export function SessionsConsole({
                     <article
                       key={session.id}
                       onClick={() => handleSessionSelect(session.id)}
-                      className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 transition lg:grid-cols-[minmax(0,2fr)_1.35fr_1.2fr_0.9fr_1.1fr] lg:items-center lg:gap-4 lg:py-4 ${
+                      className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 transition lg:grid-cols-[minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] lg:items-center lg:gap-4 lg:py-4 ${
                         isSelected ? 'bg-white/[0.045]' : 'hover:bg-white/[0.03]'
                       }`}
                     >
@@ -544,17 +544,12 @@ export function SessionsConsole({
                           <SubtleTag>{formatSessionType(session.sessionType)}</SubtleTag>
                         </div>
                         <p className="mt-1 truncate text-sm text-white/52 lg:hidden">
-                          {session.driverName} ·{' '}
                           {formatDate(session.sessionDateTime ?? session.importedAt)}
                         </p>
                       </div>
 
                       <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 lg:contents">
-                        <DataLine
-                          label="Piloto"
-                          value={session.driverName}
-                          muted={session.finishStatus ?? ''}
-                        />
+                        <DataLine label="Circuito" value={session.trackName} muted="" />
                         <DataLine
                           label="Coche"
                           value={session.carName}
