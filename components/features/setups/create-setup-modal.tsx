@@ -485,13 +485,14 @@ function SetupFormModal({
                   label="Fuel recomendado"
                   min={0}
                   max={100}
-                  step={5}
+                  step={1}
                   value={defaultValues?.recommendedFuelPercent ?? 50}
                   defaultValue={50}
                   valueSuffix="%"
+                  showStepButtons
                 />
                 <p className="text-xs text-muted">
-                  Guarda la carga recomendada para este setup entre 0 y 100%, en saltos de 5.
+                  Guarda la carga recomendada para este setup entre 0 y 100%, en saltos de 1.
                 </p>
               </div>
 
