@@ -17,6 +17,7 @@ import {
   formatRaceDurationMinutes,
   formatWeatherSummary,
 } from '@/lib/utils/setup-formatters';
+import type { SetupSessionLinkOption } from '@/services/setup-session-link.service';
 import type { SetupSummary } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
 
@@ -56,6 +57,7 @@ type SetupsConsoleProps = {
   feedbackMessage?: string;
   feedbackTone?: string;
   preferredDriverName?: string;
+  availableSessionLinks: SetupSessionLinkOption[];
   activeTeam?: {
     id: string;
     name: string;
@@ -94,6 +96,7 @@ export function SetupsConsole({
   feedbackMessage,
   feedbackTone,
   preferredDriverName,
+  availableSessionLinks,
   activeTeam,
 }: SetupsConsoleProps) {
   const router = useRouter();
@@ -341,6 +344,7 @@ export function SetupsConsole({
                 cars={cars}
                 tracks={tracks}
                 defaultCarClassId={defaultCarClassId}
+                availableSessionLinks={availableSessionLinks}
                 activeTeam={activeTeam}
                 triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
               />
@@ -755,6 +759,7 @@ export function SetupsConsole({
             tracks={tracks}
             defaultCarClassId={defaultCarClassId}
             preferredDriverName={preferredDriverName}
+            availableSessionLinks={availableSessionLinks}
             activeTeam={activeTeam}
             onClose={undefined}
           />
@@ -779,6 +784,7 @@ export function SetupsConsole({
                     tracks={tracks}
                     defaultCarClassId={defaultCarClassId}
                     preferredDriverName={preferredDriverName}
+                    availableSessionLinks={availableSessionLinks}
                     activeTeam={activeTeam}
                     onClose={() => setMobileInsightsOpen(false)}
                     mobile
@@ -808,6 +814,7 @@ function InsightsPanel({
   tracks,
   defaultCarClassId,
   preferredDriverName,
+  availableSessionLinks,
   activeTeam,
   onClose,
   mobile = false,
@@ -818,6 +825,7 @@ function InsightsPanel({
   tracks: Option[];
   defaultCarClassId?: string;
   preferredDriverName?: string;
+  availableSessionLinks: SetupSessionLinkOption[];
   activeTeam?: {
     id: string;
     name: string;
@@ -918,6 +926,7 @@ function InsightsPanel({
               cars={cars}
               tracks={tracks}
               defaultCarClassId={defaultCarClassId}
+              availableSessionLinks={availableSessionLinks}
               activeTeam={activeTeam}
               setup={setup}
               preferredDriverName={preferredDriverName}

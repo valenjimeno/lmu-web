@@ -10,6 +10,7 @@ import { DeleteSetupDialog } from '@/components/features/setups/delete-setup-dia
 import { FavoriteToggleButton } from '@/components/features/setups/favorite-toggle-button';
 import { ImportSessionForm } from '@/components/features/setups/import-session-form';
 import { RangeField } from '@/components/features/setups/range-field';
+import { SessionLinkSelector } from '@/components/features/setups/session-link-selector';
 import {
   getBrandMark,
   SetupBadge,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/utils/setup-formatters';
 import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
 import { getAuthenticatedAppContext, buildPreferredDriverNames } from '@/services/profile.service';
+import { getSetupSessionLinkOptions } from '@/services/setup-session-link.service';
 import { getSetupDetail } from '@/services/setup.service';
 import LoadingSetupDetail from './loading';
 
@@ -69,6 +71,8 @@ const errorMessages: Record<string, string> = {
   delete_confirmation_required:
     'Para borrar el setup tienes que marcar la confirmacion y escribir ELIMINAR.',
   delete_failed: 'No hemos podido borrar el setup. Intentalo de nuevo en unos segundos.',
+  invalid_session_links:
+    'No hemos podido actualizar las sesiones asociadas. Revisa la selección e inténtalo de nuevo.',
 };
 
 export default function SetupDetailPage({ params, searchParams }: SetupDetailPageProps) {
@@ -90,7 +94,10 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
     redirect(routes.login);
   }
 
-  const setup = await getSetupDetail(appContext.user.id, resolvedParams.setupId);
+  const [setup, availableSessionLinks] = await Promise.all([
+    getSetupDetail(appContext.user.id, resolvedParams.setupId),
+    getSetupSessionLinkOptions(appContext.user.id),
+  ]);
 
   if (!setup) {
     notFound();
@@ -311,6 +318,20 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                         className={selectClassName}
                       />
                     </label>
+
+                    {!isDuplicateMode ? (
+                      <div className="space-y-2">
+                        <SessionLinkSelector
+                          sessions={availableSessionLinks}
+                          currentSetupId={setup.id}
+                          selectedCarId={setup.carId}
+                          selectedTrackId={setup.trackId}
+                          initialSelectedSessionIds={availableSessionLinks
+                            .filter((session) => session.setupId === setup.id)
+                            .map((session) => session.id)}
+                        />
+                      </div>
+                    ) : null}
 
                     <div className="space-y-2">
                       <RangeField

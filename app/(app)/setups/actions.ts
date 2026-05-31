@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { routes } from '@/lib/constants/routes';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { createClient } from '@/lib/supabase/server';
+import { syncSetupSessionLinks } from '@/services/setup-session-link.service';
 import {
   createSetup,
   deleteSetup,
@@ -98,6 +99,13 @@ function resolveSafeSetupsReturnTo(value: FormDataEntryValue | null) {
   return returnTo;
 }
 
+function parseLinkedSessionIds(formData: FormData) {
+  return formData
+    .getAll('linkedSessionIds')
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+}
+
 function serializeImportError(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -175,6 +183,7 @@ export async function createSetupAction(formData: FormData) {
   const tcPowerCut = parseNullableNumber(formData.get('tcPowerCut'));
   const tcSlipAngle = parseNullableNumber(formData.get('tcSlipAngle'));
   const bestLapMs = parseNullableLapTime(formData.get('bestLap'));
+  const linkedSessionIds = parseLinkedSessionIds(formData);
 
   if (
     !name ||
@@ -207,7 +216,7 @@ export async function createSetupAction(formData: FormData) {
     const visibility = rawVisibility as Database['public']['Enums']['setup_visibility'];
     const activeTeamId = await resolveActiveTeamIdForVisibility(user.id, visibility);
 
-    await createSetup({
+    const setupId = await createSetup({
       ownerUserId: user.id,
       name,
       carId,
@@ -226,15 +235,27 @@ export async function createSetupAction(formData: FormData) {
       tcSlipAngle,
       bestLapMs,
     });
+    await syncSetupSessionLinks({
+      ownerUserId: user.id,
+      setupId,
+      sessionIds: linkedSessionIds,
+    });
   } catch (error) {
-    if (error instanceof Error && error.message === 'team_visibility_requires_active_team') {
-      redirect(`${routes.setups}?error=team_visibility_requires_active_team`);
+    if (error instanceof Error) {
+      if (error.message === 'team_visibility_requires_active_team') {
+        redirect(`${routes.setups}?error=team_visibility_requires_active_team`);
+      }
+
+      if (error.message === 'invalid_session_links') {
+        redirect(`${routes.setups}?error=invalid_session_links`);
+      }
     }
 
     redirect(`${routes.setups}?error=create_failed`);
   }
 
   revalidatePath(routes.setups);
+  revalidatePath(routes.sessions);
   redirect(`${routes.setups}?created=1`);
 }
 
@@ -262,6 +283,7 @@ export async function updateSetupAction(formData: FormData) {
   const tcPowerCut = parseNullableNumber(formData.get('tcPowerCut'));
   const tcSlipAngle = parseNullableNumber(formData.get('tcSlipAngle'));
   const bestLapMs = parseNullableLapTime(formData.get('bestLap'));
+  const linkedSessionIds = parseLinkedSessionIds(formData);
 
   if (
     !setupId ||
@@ -312,9 +334,20 @@ export async function updateSetupAction(formData: FormData) {
       tcSlipAngle,
       bestLapMs,
     });
+    await syncSetupSessionLinks({
+      ownerUserId: user.id,
+      setupId,
+      sessionIds: linkedSessionIds,
+    });
   } catch (error) {
-    if (error instanceof Error && error.message === 'team_visibility_requires_active_team') {
-      redirect(`${routes.setups}/${setupId}?error=team_visibility_requires_active_team`);
+    if (error instanceof Error) {
+      if (error.message === 'team_visibility_requires_active_team') {
+        redirect(`${routes.setups}/${setupId}?error=team_visibility_requires_active_team`);
+      }
+
+      if (error.message === 'invalid_session_links') {
+        redirect(`${routes.setups}/${setupId}?error=invalid_session_links`);
+      }
     }
 
     redirect(`${routes.setups}/${setupId}?error=update_failed`);
@@ -322,6 +355,7 @@ export async function updateSetupAction(formData: FormData) {
 
   revalidatePath(routes.setups);
   revalidatePath(`${routes.setups}/${setupId}`);
+  revalidatePath(routes.sessions);
   redirect(
     returnTo && returnTo.startsWith(routes.setups)
       ? `${returnTo}?saved=1`

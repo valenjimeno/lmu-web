@@ -1,12 +1,14 @@
 import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { DeleteSessionDialog } from '@/components/features/sessions/delete-session-dialog';
+import { SetupQuickPreviewModal } from '@/components/features/sessions/setup-quick-preview-modal';
 import { Button } from '@/components/ui/button';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime, formatRaceDurationMinutes } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
 import { getAuthenticatedAppContext } from '@/services/profile.service';
 import { getSessionDetail } from '@/services/session.service';
+import { getSetupDetail } from '@/services/setup.service';
 import LoadingSessionDetail from './loading';
 
 type SessionDetailPageProps = {
@@ -168,6 +170,9 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
     notFound();
   }
 
+  const linkedSetup =
+    session.setupId !== null ? await getSetupDetail(appContext.user.id, session.setupId) : null;
+
   const bestSector1Ms = session.laps.reduce<number | null>((best, lap) => {
     if (lap.sector1Ms === null || lap.sector1Ms <= 0) {
       return best;
@@ -206,6 +211,7 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
                 {session.sourceCarClass ?? session.carClassId ?? 'Clase no definida'} ·{' '}
                 {session.carName} · {session.trackName}
               </p>
+              {linkedSetup ? <SetupQuickPreviewModal setup={linkedSetup} /> : null}
               <div className="flex flex-wrap gap-2">
                 <span className="rounded-full border border-[rgba(225,178,122,0.24)] bg-[rgba(225,178,122,0.12)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f0cca0]">
                   {formatSessionType(session.sessionType)}
@@ -251,11 +257,6 @@ async function SessionDetailContent({ params }: SessionDetailPageProps) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            {session.setupId ? (
-              <Button href={`${routes.setups}/${session.setupId}`} asChild variant="secondary">
-                Abrir setup
-              </Button>
-            ) : null}
             <Button href={routes.sessions} asChild variant="secondary">
               Volver al listado
             </Button>

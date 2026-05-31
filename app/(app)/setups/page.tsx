@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { SetupsConsole } from '@/components/features/setups/setups-console';
 import { routes } from '@/lib/constants/routes';
 import { getAuthenticatedAppContext } from '@/services/profile.service';
+import { getSetupSessionLinkOptions } from '@/services/setup-session-link.service';
 import { getSetupPageData } from '@/services/setup.service';
 import { getUserTeams } from '@/services/team.service';
 import type { Database } from '@/types/database.types';
@@ -38,6 +39,8 @@ const errorMessages: Record<string, string> = {
   import_failed: 'No hemos podido importar la sesión. Inténtalo de nuevo en unos segundos.',
   team_visibility_requires_active_team:
     'Para guardar un setup de equipo necesitas tener un equipo activo seleccionado.',
+  invalid_session_links:
+    'No hemos podido asociar una o varias sesiones. Revisa la selección e inténtalo de nuevo.',
 };
 
 const SETUPS_PAGE_SIZE = 6;
@@ -79,7 +82,10 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
     page: currentPage,
     pageSize: SETUPS_PAGE_SIZE,
   });
-  const teams = await getUserTeams(appContext.user.id);
+  const [teams, availableSessionLinks] = await Promise.all([
+    getUserTeams(appContext.user.id),
+    getSetupSessionLinkOptions(appContext.user.id),
+  ]);
   const activeTeam = teams.find((team) => team.id === appContext.profile?.activeTeamId) ?? null;
 
   const feedbackMessage = resolvedSearchParams.created
@@ -114,6 +120,7 @@ export default async function SetupsPage({ searchParams }: SetupsPageProps) {
       feedbackMessage={feedbackMessageWithDebug}
       feedbackTone={feedbackTone}
       preferredDriverName={appContext.preferredDriverName}
+      availableSessionLinks={availableSessionLinks}
       activeTeam={
         activeTeam ? { id: activeTeam.id, name: activeTeam.name, slug: activeTeam.slug } : null
       }

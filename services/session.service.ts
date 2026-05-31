@@ -358,7 +358,7 @@ function buildSessionSummary(
 
   return {
     id: session.id,
-    name: setup?.name ?? (sessionNameFromPayload || fallbackFileName),
+    name: sessionNameFromPayload || fallbackFileName,
     setupId: session.setup_id,
     linkedSetupName: setup?.name ?? null,
     carId: car?.id ?? setup?.car_id ?? null,

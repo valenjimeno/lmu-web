@@ -11,11 +11,13 @@ import {
 import { DeleteSetupDialog } from '@/components/features/setups/delete-setup-dialog';
 import { ImportSessionForm } from '@/components/features/setups/import-session-form';
 import { RangeField } from '@/components/features/setups/range-field';
+import { SessionLinkSelector } from '@/components/features/setups/session-link-selector';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
 import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
 import { formatLapTime, formatSetupVisibility } from '@/lib/utils/setup-formatters';
+import type { SetupSessionLinkOption } from '@/services/setup-session-link.service';
 import type { SetupSummary } from '@/services/setup.service';
 
 type Option = {
@@ -39,6 +41,7 @@ type SetupFormModalProps = {
     name: string;
     slug: string;
   } | null;
+  availableSessionLinks: SetupSessionLinkOption[];
   titleKicker: string;
   title: string;
   description: string;
@@ -66,6 +69,7 @@ type SetupFormModalProps = {
     tcSlipAngle?: number | null;
     bestLapMs?: number | null;
     preferredDriverNames?: string[];
+    linkedSessionIds?: string[];
   };
 };
 
@@ -79,6 +83,7 @@ type CreateSetupModalProps = {
     name: string;
     slug: string;
   } | null;
+  availableSessionLinks: SetupSessionLinkOption[];
   triggerClassName?: string;
 };
 
@@ -92,6 +97,7 @@ type EditSetupModalProps = {
     name: string;
     slug: string;
   } | null;
+  availableSessionLinks: SetupSessionLinkOption[];
   setup: SetupSummary;
   preferredDriverName?: string;
   triggerClassName?: string;
@@ -205,12 +211,14 @@ function SetupFormModal({
   action,
   duplicateAction,
   defaultValues,
+  availableSessionLinks,
 }: SetupFormModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCarClassId, setSelectedCarClassId] = useState(
     defaultValues?.carClassId ?? defaultCarClassId ?? '',
   );
   const [selectedCarId, setSelectedCarId] = useState(defaultValues?.carId ?? '');
+  const [selectedTrackId, setSelectedTrackId] = useState(defaultValues?.trackId ?? '');
   const [isDuplicateMode, setIsDuplicateMode] = useState(false);
   const [selectedWeatherSummary, setSelectedWeatherSummary] = useState<WeatherValue>(
     defaultValues?.weatherSummary === 'sun-cloud' || defaultValues?.weatherSummary === 'rain'
@@ -241,6 +249,7 @@ function SetupFormModal({
     setIsDuplicateMode(false);
     setSelectedCarClassId(defaultValues?.carClassId ?? defaultCarClassId ?? '');
     setSelectedCarId(defaultValues?.carId ?? '');
+    setSelectedTrackId(defaultValues?.trackId ?? '');
     setSelectedWeatherSummary(
       defaultValues?.weatherSummary === 'sun-cloud' || defaultValues?.weatherSummary === 'rain'
         ? defaultValues.weatherSummary
@@ -379,7 +388,8 @@ function SetupFormModal({
                 <select
                   name="trackId"
                   required
-                  defaultValue={defaultValues?.trackId ?? ''}
+                  value={selectedTrackId}
+                  onChange={(event) => setSelectedTrackId(event.target.value)}
                   className={selectClassName}
                 >
                   <option value="" disabled>
@@ -392,6 +402,16 @@ function SetupFormModal({
                   ))}
                 </select>
               </label>
+
+              {!isDuplicateMode ? (
+                <SessionLinkSelector
+                  sessions={availableSessionLinks}
+                  currentSetupId={defaultValues?.setupId}
+                  selectedCarId={selectedCarId}
+                  selectedTrackId={selectedTrackId}
+                  initialSelectedSessionIds={defaultValues?.linkedSessionIds ?? []}
+                />
+              ) : null}
 
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">Tipo</span>
@@ -652,6 +672,7 @@ export function CreateSetupModal({
   tracks,
   defaultCarClassId,
   activeTeam,
+  availableSessionLinks,
   triggerClassName,
 }: CreateSetupModalProps) {
   return (
@@ -661,6 +682,7 @@ export function CreateSetupModal({
       tracks={tracks}
       defaultCarClassId={defaultCarClassId}
       activeTeam={activeTeam}
+      availableSessionLinks={availableSessionLinks}
       titleKicker="Nuevo setup"
       title="Crear una configuración nueva"
       description="Añade coche, pista, tipo, visibilidad y notas sin salir de la biblioteca. El formulario mantiene una lectura clara también en móvil."
@@ -687,6 +709,7 @@ export function EditSetupModal({
   tracks,
   defaultCarClassId,
   activeTeam,
+  availableSessionLinks,
   setup,
   preferredDriverName,
   triggerClassName,
@@ -698,6 +721,7 @@ export function EditSetupModal({
       tracks={tracks}
       defaultCarClassId={defaultCarClassId}
       activeTeam={activeTeam}
+      availableSessionLinks={availableSessionLinks}
       titleKicker="Editar setup"
       title="Actualizar configuración"
       description="Modifica los valores actuales sin salir de la biblioteca. Al guardar, la fecha de modificación se actualiza automáticamente."
@@ -724,6 +748,9 @@ export function EditSetupModal({
         tcSlipAngle: setup.tcSlipAngle,
         bestLapMs: setup.bestLapMs,
         preferredDriverNames: preferredDriverName ? [preferredDriverName] : [],
+        linkedSessionIds: availableSessionLinks
+          .filter((session) => session.setupId === setup.id)
+          .map((session) => session.id),
       }}
       trigger={
         <button
