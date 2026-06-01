@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CreateSessionModal } from '@/components/features/sessions/create-session-modal';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
@@ -26,6 +28,13 @@ type SessionConsoleFilters = {
   carClassId?: string;
   carId?: string;
   trackId?: string;
+};
+
+type SessionComparisonMetric = {
+  key: string;
+  label: string;
+  values: Record<string, string>;
+  preferredSessionId?: string;
 };
 
 type SessionsConsoleProps = {
@@ -78,6 +87,97 @@ function formatPositionDelta(value: number | null) {
 
 function buildCompactLabel(value: string, prefix: string) {
   return `${prefix}: ${value}`;
+}
+
+function formatDeltaMs(value: number | null) {
+  if (value === null) {
+    return 'No definido';
+  }
+
+  const seconds = value / 1000;
+  return `${seconds >= 0 ? '+' : ''}${seconds.toFixed(2)} s`;
+}
+
+function formatSpeedMetric(value: number | null) {
+  if (value === null) {
+    return 'No definido';
+  }
+
+  return `${value.toFixed(1)} km/h`;
+}
+
+function formatVirtualEnergyMetric(value: number | null) {
+  if (value === null) {
+    return 'No definido';
+  }
+
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function formatTireDegradationMetric(front: number | null, rear: number | null) {
+  if (front === null && rear === null) {
+    return 'No definido';
+  }
+
+  const frontLabel = front === null ? 'ND' : `${(front * 100).toFixed(0)}%`;
+  const rearLabel = rear === null ? 'ND' : `${(rear * 100).toFixed(0)}%`;
+  return `F ${frontLabel} / R ${rearLabel}`;
+}
+
+function resolveTotalVirtualEnergyConsumption(session: SessionSummary) {
+  if (
+    session.virtualEnergyStart !== null &&
+    session.virtualEnergyEnd !== null &&
+    session.virtualEnergyStart >= session.virtualEnergyEnd
+  ) {
+    return session.virtualEnergyStart - session.virtualEnergyEnd;
+  }
+
+  if (
+    session.averageVirtualEnergyUsedPerLap !== null &&
+    session.lapsCompleted !== null &&
+    session.lapsCompleted > 0
+  ) {
+    return session.averageVirtualEnergyUsedPerLap * session.lapsCompleted;
+  }
+
+  return null;
+}
+
+function resolveTotalTireDegradation(session: SessionSummary) {
+  return {
+    front: session.tireDropFront,
+    rear: session.tireDropRear,
+  };
+}
+
+function formatRaceDateLabel(
+  sessionDateTime: string | null,
+  sessionName?: string | null,
+  sourceFileName?: string | null,
+) {
+  const fallbackText = sessionName?.trim() || sourceFileName?.trim() || '';
+  const match = fallbackText.match(/(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})/);
+
+  if (match) {
+    const [, year, month, day, hour, minute, second] = match;
+    const fallbackDate = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    );
+
+    return formatDate(fallbackDate.toISOString());
+  }
+
+  if (sessionDateTime) {
+    return formatDate(sessionDateTime);
+  }
+
+  return 'Fecha de carrera no disponible';
 }
 
 function aggregateImportJobs(jobs: SessionImportJobSummary[]): SessionImportProgressSummary | null {
@@ -134,6 +234,9 @@ export function SessionsConsole({
     sessions[0]?.id ?? null,
   );
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
+  const [comparisonSelectionIds, setComparisonSelectionIds] = useState<string[]>([]);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const [dismissedFeedbackMessage, setDismissedFeedbackMessage] = useState<string | undefined>(
     undefined,
   );
@@ -194,6 +297,21 @@ export function SessionsConsole({
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) ?? sessions[0] ?? null,
     [selectedSessionId, sessions],
+  );
+  const normalizedComparisonSelectionIds = useMemo(
+    () => normalizeComparisonSelection(comparisonSelectionIds, sessions),
+    [comparisonSelectionIds, sessions],
+  );
+  const selectedComparisonSessions = useMemo(
+    () =>
+      normalizedComparisonSelectionIds
+        .map((sessionId) => sessions.find((session) => session.id === sessionId) ?? null)
+        .filter(Boolean) as SessionSummary[],
+    [normalizedComparisonSelectionIds, sessions],
+  );
+  const comparisonMetrics = useMemo(
+    () => buildComparisonMetrics(selectedComparisonSessions),
+    [selectedComparisonSessions],
   );
   const visibleFeedbackMessage =
     feedbackMessage && dismissedFeedbackMessage !== feedbackMessage ? feedbackMessage : undefined;
@@ -388,6 +506,54 @@ export function SessionsConsole({
     }
   }
 
+  function toggleComparisonSession(sessionId: string) {
+    setComparisonError(null);
+    setComparisonSelectionIds((currentSelection) => {
+      const normalizedSelection = normalizeComparisonSelection(currentSelection, sessions);
+
+      if (normalizedSelection.includes(sessionId)) {
+        return normalizedSelection.filter((id) => id !== sessionId);
+      }
+
+      if (normalizedSelection.length >= 3) {
+        setComparisonError('Solo puedes comparar un máximo de 3 sesiones al mismo tiempo.');
+        return normalizedSelection;
+      }
+
+      return [...normalizedSelection, sessionId];
+    });
+  }
+
+  function handleCompare() {
+    if (selectedComparisonSessions.length < 2) {
+      return;
+    }
+
+    const firstSession = selectedComparisonSessions[0];
+    const sameScope = selectedComparisonSessions.every(
+      (session) => session.carId === firstSession.carId && session.trackId === firstSession.trackId,
+    );
+
+    if (!sameScope) {
+      setComparisonModalOpen(false);
+      setComparisonError('Selecciona sesiones del mismo coche y circuito para compararlas.');
+      return;
+    }
+
+    const everySessionHasLapTime = selectedComparisonSessions.every(
+      (session) => session.bestLapMs !== null,
+    );
+
+    if (!everySessionHasLapTime) {
+      setComparisonModalOpen(false);
+      setComparisonError('Todas las sesiones comparadas deben tener una mejor vuelta guardada.');
+      return;
+    }
+
+    setComparisonError(null);
+    setComparisonModalOpen(true);
+  }
+
   return (
     <section className="space-y-4">
       {visibleFeedbackMessage ? (
@@ -395,6 +561,11 @@ export function SessionsConsole({
           className={`rounded-[1rem] border border-white/8 bg-white/[0.04] px-4 py-3 text-sm ${feedbackTone ?? ''}`}
         >
           {visibleFeedbackMessage}
+        </div>
+      ) : null}
+      {comparisonError ? (
+        <div className="rounded-[1rem] border border-[rgba(242,162,148,0.22)] bg-[rgba(242,162,148,0.08)] px-4 py-3 text-sm text-[#f3b4aa]">
+          {comparisonError}
         </div>
       ) : null}
 
@@ -453,21 +624,35 @@ export function SessionsConsole({
               <h2 className="text-[1.9rem] font-medium text-white">Sesiones</h2>
               <span className="text-sm text-muted">{totalCount} sesiones</span>
             </div>
-            <CreateSessionModal
-              preferredDriverName={preferredDriverName}
-              latestImportedSessionReference={latestImportedSessionReference}
-              canBulkImportSessions={canBulkImportSessions}
-              currentPlan={currentPlan}
-              onJobCreated={(job) => {
-                setPolledSessionImportJobs((currentJobs) => [
-                  job,
-                  ...currentJobs.filter((currentJob) => currentJob.id !== job.id),
-                ]);
-                setTransientFinishedJobIds([]);
-                setDismissedFeedbackMessage(undefined);
-              }}
-              triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:ml-auto sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
-            />
+            <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm.items-center">
+              <Button
+                type="button"
+                onClick={handleCompare}
+                disabled={selectedComparisonSessions.length < 2}
+                className={`min-h-[4.625rem] w-full rounded-md px-3 py-2 text-center shadow-none disabled:cursor-not-allowed disabled:hover:brightness-100 sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0 ${
+                  selectedComparisonSessions.length >= 2
+                    ? 'border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] text-white hover:bg-[rgba(225,178,122,0.26)]'
+                    : 'border-white/8 bg-white/[0.03] text-white/38 opacity-70'
+                }`}
+              >
+                <span className="max-w-full text-xs leading-none sm:text-sm">Comparar</span>
+              </Button>
+              <CreateSessionModal
+                preferredDriverName={preferredDriverName}
+                latestImportedSessionReference={latestImportedSessionReference}
+                canBulkImportSessions={canBulkImportSessions}
+                currentPlan={currentPlan}
+                onJobCreated={(job) => {
+                  setPolledSessionImportJobs((currentJobs) => [
+                    job,
+                    ...currentJobs.filter((currentJob) => currentJob.id !== job.id),
+                  ]);
+                  setTransientFinishedJobIds([]);
+                  setDismissedFeedbackMessage(undefined);
+                }}
+                triggerClassName="min-h-[4.625rem] w-full rounded-md border-[rgba(225,178,122,0.3)] bg-[rgba(225,178,122,0.18)] px-3 py-2 text-center text-white shadow-none hover:bg-[rgba(225,178,122,0.26)] sm:min-h-10 sm:w-[8.75rem] sm:px-4 sm:py-0"
+              />
+            </div>
           </div>
 
           <SessionsFiltersForm
@@ -516,7 +701,8 @@ export function SessionsConsole({
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-[minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+              <div className="hidden grid-cols-[auto_minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] gap-4 px-4 py-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted lg:grid">
+                <span>Comparar</span>
                 <span>Sesión</span>
                 <span>Circuito</span>
                 <span>Coche</span>
@@ -532,10 +718,21 @@ export function SessionsConsole({
                     <article
                       key={session.id}
                       onClick={() => handleSessionSelect(session.id)}
-                      className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 transition lg:grid-cols-[minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] lg:items-center lg:gap-4 lg:py-4 ${
+                      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-4 py-3 transition lg:grid-cols-[auto_minmax(0,2.2fr)_1.2fr_1.2fr_0.9fr_1.1fr] lg:items-center lg:gap-4 lg:py-4 ${
                         isSelected ? 'bg-white/[0.045]' : 'hover:bg-white/[0.03]'
                       }`}
                     >
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={normalizedComparisonSelectionIds.includes(session.id)}
+                          onChange={() => toggleComparisonSession(session.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Comparar sesión ${session.name}`}
+                          className="h-4 w-4 rounded border-white/20 bg-transparent accent-[#e1b27a]"
+                        />
+                      </div>
+
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="block min-w-0 flex-1 truncate text-base font-medium text-white">
@@ -633,6 +830,14 @@ export function SessionsConsole({
             document.body,
           )
         : null}
+
+      {comparisonModalOpen ? (
+        <ComparisonModal
+          sessions={selectedComparisonSessions}
+          metrics={comparisonMetrics}
+          onClose={() => setComparisonModalOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1120,4 +1325,377 @@ function SessionInsightsPanel({
       )}
     </aside>
   );
+}
+
+function ComparisonModal({
+  sessions,
+  metrics,
+  onClose,
+}: {
+  sessions: SessionSummary[];
+  metrics: SessionComparisonMetric[];
+  onClose: () => void;
+}) {
+  const winningSessionId = [...sessions]
+    .filter((session) => session.bestLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.bestLapMs ?? Number.MAX_SAFE_INTEGER) - (right.bestLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0]?.id;
+  const winningSession = sessions.find((session) => session.id === winningSessionId) ?? null;
+
+  return (
+    <Modal title="Comparativa de sesiones" className="max-w-2xl xl:max-w-4xl">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-white/62">
+            Comparando {sessions.length} sesiones del mismo coche y circuito.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="self-start rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/62 transition hover:border-white/18 hover:text-white"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {winningSession ? (
+            <section className="rounded-[1.1rem] border border-[rgba(143,197,164,0.28)] bg-[rgba(143,197,164,0.08)] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-white">{winningSession.name}</p>
+                  <p className="mt-1 text-xs text-white/52">
+                    {winningSession.driverName} •{' '}
+                    {formatRaceDateLabel(
+                      winningSession.sessionDateTime,
+                      winningSession.name,
+                      winningSession.sourceFileName,
+                    )}
+                  </p>
+                </div>
+                <SubtleTag>Mejor vuelta</SubtleTag>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {metrics.map((metric) => (
+                  <div
+                    key={`${winningSession.id}-${metric.key}`}
+                    className={`flex items-center justify-between gap-3 rounded-[0.9rem] border px-3 py-3 ${
+                      metric.preferredSessionId === winningSession.id
+                        ? 'border-[rgba(143,197,164,0.3)] bg-[rgba(143,197,164,0.12)]'
+                        : 'border-white/8 bg-white/[0.02]'
+                    }`}
+                  >
+                    <span className="text-sm text-white/60">{metric.label}</span>
+                    <span className="max-w-[55%] text-right text-sm font-semibold text-white">
+                      {metric.values[winningSession.id]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr className="text-left">
+                <th className="hairline-divider border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Métrica
+                </th>
+                {sessions.map((session) => (
+                  <th key={session.id} className="hairline-divider border-b px-4 py-3 text-left">
+                    <div
+                      className={`min-w-[12rem] rounded-[1rem] border px-3 py-3 transition ${
+                        session.id === winningSessionId
+                          ? 'border-[rgba(143,197,164,0.26)] bg-[rgba(143,197,164,0.08)]'
+                          : 'border-transparent opacity-55'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-white">{session.name}</p>
+                      <p className="mt-1 text-xs text-white/52">
+                        {session.driverName} •{' '}
+                        {formatRaceDateLabel(
+                          session.sessionDateTime,
+                          session.name,
+                          session.sourceFileName,
+                        )}
+                      </p>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((metric) => (
+                <tr key={metric.key}>
+                  <th className="hairline-divider border-b px-4 py-3 text-left text-sm font-medium text-white/62">
+                    {metric.label}
+                  </th>
+                  {sessions.map((session) => {
+                    const isPreferred = metric.preferredSessionId === session.id;
+                    const isWinnerColumn = session.id === winningSessionId;
+
+                    return (
+                      <td
+                        key={`${metric.key}-${session.id}`}
+                        className="hairline-divider border-b px-4 py-3"
+                      >
+                        <div
+                          className={`rounded-[0.95rem] border px-3 py-3 ${
+                            isPreferred
+                              ? 'border-[rgba(143,197,164,0.3)] bg-[rgba(143,197,164,0.12)]'
+                              : isWinnerColumn
+                                ? 'border-[rgba(255,255,255,0.12)] bg-white/[0.045]'
+                                : 'border-white/8 bg-white/[0.025] opacity-55'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-white">
+                            {metric.values[session.id]}
+                          </p>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function normalizeComparisonSelection(selection: string[], sessions: SessionSummary[]) {
+  const availableIds = new Set(sessions.map((session) => session.id));
+  return selection.filter((sessionId) => availableIds.has(sessionId)).slice(0, 3);
+}
+
+function buildComparisonMetrics(selectedSessions: SessionSummary[]): SessionComparisonMetric[] {
+  if (selectedSessions.length === 0) {
+    return [];
+  }
+
+  const fastestSession = [...selectedSessions]
+    .filter((session) => session.bestLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.bestLapMs ?? Number.MAX_SAFE_INTEGER) - (right.bestLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const bestFinishSession = [...selectedSessions]
+    .filter((session) => session.finishPos !== null)
+    .sort(
+      (left, right) =>
+        (left.finishPos ?? Number.MAX_SAFE_INTEGER) - (right.finishPos ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const bestPositionGainSession = [...selectedSessions]
+    .filter((session) => session.positionGain !== null)
+    .sort(
+      (left, right) =>
+        (right.positionGain ?? Number.MIN_SAFE_INTEGER) -
+        (left.positionGain ?? Number.MIN_SAFE_INTEGER),
+    )[0];
+  const mostLapsSession = [...selectedSessions]
+    .filter((session) => session.lapsCompleted !== null)
+    .sort((left, right) => (right.lapsCompleted ?? 0) - (left.lapsCompleted ?? 0))[0];
+  const bestAverageLapSession = [...selectedSessions]
+    .filter((session) => session.averageLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.averageLapMs ?? Number.MAX_SAFE_INTEGER) -
+        (right.averageLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const bestOptimalLapSession = [...selectedSessions]
+    .filter((session) => session.optimalLapMs !== null)
+    .sort(
+      (left, right) =>
+        (left.optimalLapMs ?? Number.MAX_SAFE_INTEGER) -
+        (right.optimalLapMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const bestThreeLapSession = [...selectedSessions]
+    .filter((session) => session.bestThreeLapAverageMs !== null)
+    .sort(
+      (left, right) =>
+        (left.bestThreeLapAverageMs ?? Number.MAX_SAFE_INTEGER) -
+        (right.bestThreeLapAverageMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const mostConsistentSession = [...selectedSessions]
+    .filter((session) => session.lapConsistencyMs !== null)
+    .sort(
+      (left, right) =>
+        (left.lapConsistencyMs ?? Number.MAX_SAFE_INTEGER) -
+        (right.lapConsistencyMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const lowestFadeSession = [...selectedSessions]
+    .filter((session) => session.paceFadeMs !== null)
+    .sort(
+      (left, right) =>
+        Math.abs(left.paceFadeMs ?? Number.MAX_SAFE_INTEGER) -
+        Math.abs(right.paceFadeMs ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const highestTopSpeedSession = [...selectedSessions]
+    .filter((session) => session.peakTopSpeedKph !== null)
+    .sort(
+      (left, right) =>
+        (right.peakTopSpeedKph ?? Number.MIN_SAFE_INTEGER) -
+        (left.peakTopSpeedKph ?? Number.MIN_SAFE_INTEGER),
+    )[0];
+  const lowestVirtualEnergySession = [...selectedSessions]
+    .filter((session) => resolveTotalVirtualEnergyConsumption(session) !== null)
+    .sort(
+      (left, right) =>
+        (resolveTotalVirtualEnergyConsumption(left) ?? Number.MAX_SAFE_INTEGER) -
+        (resolveTotalVirtualEnergyConsumption(right) ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+  const lowestTireDropSession = [...selectedSessions]
+    .filter((session) => session.tireDropFront !== null || session.tireDropRear !== null)
+    .sort((left, right) => {
+      const leftValue = (left.tireDropFront ?? 0) + (left.tireDropRear ?? 0);
+      const rightValue = (right.tireDropFront ?? 0) + (right.tireDropRear ?? 0);
+
+      return leftValue - rightValue;
+    })[0];
+
+  return [
+    {
+      key: 'setup',
+      label: 'Setup utilizado',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [
+          session.id,
+          session.linkedSetupName ?? 'Sin setup asociado',
+        ]),
+      ),
+    },
+    {
+      key: 'lap',
+      label: 'Mejor vuelta',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatLapTime(session.bestLapMs)]),
+      ),
+      preferredSessionId: fastestSession?.id,
+    },
+    {
+      key: 'average-lap',
+      label: 'Ritmo medio',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatLapTime(session.averageLapMs)]),
+      ),
+      preferredSessionId: bestAverageLapSession?.id,
+    },
+    {
+      key: 'optimal-lap',
+      label: 'Vuelta óptima',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatLapTime(session.optimalLapMs)]),
+      ),
+      preferredSessionId: bestOptimalLapSession?.id,
+    },
+    {
+      key: 'best-three',
+      label: 'Mejor media 3 vueltas',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [
+          session.id,
+          formatLapTime(session.bestThreeLapAverageMs),
+        ]),
+      ),
+      preferredSessionId: bestThreeLapSession?.id,
+    },
+    {
+      key: 'consistency',
+      label: 'Consistencia',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatDeltaMs(session.lapConsistencyMs)]),
+      ),
+      preferredSessionId: mostConsistentSession?.id,
+    },
+    {
+      key: 'pace-fade',
+      label: 'Pace fade',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatDeltaMs(session.paceFadeMs)]),
+      ),
+      preferredSessionId: lowestFadeSession?.id,
+    },
+    {
+      key: 'top-speed',
+      label: 'Velocidad punta',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatSpeedMetric(session.peakTopSpeedKph)]),
+      ),
+      preferredSessionId: highestTopSpeedSession?.id,
+    },
+    {
+      key: 'tire-degradation',
+      label: 'Deg. neumaticos total',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [
+          session.id,
+          formatTireDegradationMetric(
+            resolveTotalTireDegradation(session).front,
+            resolveTotalTireDegradation(session).rear,
+          ),
+        ]),
+      ),
+      preferredSessionId: lowestTireDropSession?.id,
+    },
+    {
+      key: 'virtual-energy',
+      label: 'Virtual energy total',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [
+          session.id,
+          formatVirtualEnergyMetric(resolveTotalVirtualEnergyConsumption(session)),
+        ]),
+      ),
+      preferredSessionId: lowestVirtualEnergySession?.id,
+    },
+    {
+      key: 'gain',
+      label: 'Posiciones ganadas',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatPositionDelta(session.positionGain)]),
+      ),
+      preferredSessionId: bestPositionGainSession?.id,
+    },
+    {
+      key: 'grid',
+      label: 'Salida',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatNumberMetric(session.gridPos)]),
+      ),
+    },
+    {
+      key: 'finish',
+      label: 'Llegada',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatNumberMetric(session.finishPos)]),
+      ),
+      preferredSessionId: bestFinishSession?.id,
+    },
+    {
+      key: 'laps',
+      label: 'Vueltas',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatNumberMetric(session.lapsCompleted)]),
+      ),
+      preferredSessionId: mostLapsSession?.id,
+    },
+    {
+      key: 'pitstops',
+      label: 'Pitstops',
+      values: Object.fromEntries(
+        selectedSessions.map((session) => [session.id, formatNumberMetric(session.pitstops)]),
+      ),
+    },
+  ];
+}
+
+function formatNumberMetric(value: number | null) {
+  return value === null ? 'No definido' : String(value);
 }

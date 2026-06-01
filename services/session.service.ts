@@ -21,6 +21,20 @@ type SetupSessionRow = Pick<
   | 'track_course'
   | 'race_time_minutes'
   | 'best_lap_seconds'
+  | 'average_lap_ms'
+  | 'optimal_lap_ms'
+  | 'lap_consistency_ms'
+  | 'best_three_lap_average_ms'
+  | 'pace_fade_ms'
+  | 'valid_lap_rate'
+  | 'average_virtual_energy_used_per_lap'
+  | 'virtual_energy_start'
+  | 'virtual_energy_end'
+  | 'peak_top_speed_kph'
+  | 'tire_drop_front'
+  | 'tire_drop_rear'
+  | 'tire_drop_front_per_lap'
+  | 'tire_drop_rear_per_lap'
   | 'finish_pos'
   | 'grid_pos'
   | 'finish_status'
@@ -148,6 +162,20 @@ type SessionIdentityRow = Pick<
   | 'track_course'
   | 'race_time_minutes'
   | 'best_lap_seconds'
+  | 'average_lap_ms'
+  | 'optimal_lap_ms'
+  | 'lap_consistency_ms'
+  | 'best_three_lap_average_ms'
+  | 'pace_fade_ms'
+  | 'valid_lap_rate'
+  | 'average_virtual_energy_used_per_lap'
+  | 'virtual_energy_start'
+  | 'virtual_energy_end'
+  | 'peak_top_speed_kph'
+  | 'tire_drop_front'
+  | 'tire_drop_rear'
+  | 'tire_drop_front_per_lap'
+  | 'tire_drop_rear_per_lap'
   | 'finish_pos'
   | 'grid_pos'
   | 'finish_status'
@@ -175,6 +203,20 @@ export type SessionSummary = {
   sessionType: string | null;
   raceDurationMinutes: number | null;
   bestLapMs: number | null;
+  averageLapMs: number | null;
+  optimalLapMs: number | null;
+  lapConsistencyMs: number | null;
+  bestThreeLapAverageMs: number | null;
+  paceFadeMs: number | null;
+  validLapRate: number | null;
+  averageVirtualEnergyUsedPerLap: number | null;
+  virtualEnergyStart: number | null;
+  virtualEnergyEnd: number | null;
+  peakTopSpeedKph: number | null;
+  tireDropFront: number | null;
+  tireDropRear: number | null;
+  tireDropFrontPerLap: number | null;
+  tireDropRearPerLap: number | null;
   gridPos: number | null;
   finishPos: number | null;
   positionGain: number | null;
@@ -377,6 +419,21 @@ function buildSessionSummary(
     raceDurationMinutes: session.race_time_minutes,
     bestLapMs:
       session.best_lap_seconds !== null ? Math.round(session.best_lap_seconds * 1000) : null,
+    averageLapMs: session.average_lap_ms,
+    optimalLapMs: session.optimal_lap_ms,
+    lapConsistencyMs:
+      session.lap_consistency_ms !== null ? Number(session.lap_consistency_ms) : null,
+    bestThreeLapAverageMs: session.best_three_lap_average_ms,
+    paceFadeMs: session.pace_fade_ms,
+    validLapRate: session.valid_lap_rate,
+    averageVirtualEnergyUsedPerLap: session.average_virtual_energy_used_per_lap,
+    virtualEnergyStart: session.virtual_energy_start,
+    virtualEnergyEnd: session.virtual_energy_end,
+    peakTopSpeedKph: session.peak_top_speed_kph,
+    tireDropFront: session.tire_drop_front,
+    tireDropRear: session.tire_drop_rear,
+    tireDropFrontPerLap: session.tire_drop_front_per_lap,
+    tireDropRearPerLap: session.tire_drop_rear_per_lap,
     gridPos: session.grid_pos,
     finishPos: session.finish_pos,
     positionGain:
@@ -743,7 +800,7 @@ export async function getSessionPageData(
     selectedTrackName,
   );
   const sessionListSelect =
-    'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, finish_pos, grid_pos, finish_status, laps_completed, pitstops';
+    'id, setup_id, raw_payload, driver_name, car_class, car_type, source_file_name, source_session_setting, imported_at, session_datetime, session_type, track_venue, track_course, race_time_minutes, best_lap_seconds, average_lap_ms, optimal_lap_ms, lap_consistency_ms, best_three_lap_average_ms, pace_fade_ms, valid_lap_rate, average_virtual_energy_used_per_lap, virtual_energy_start, virtual_energy_end, peak_top_speed_kph, tire_drop_front, tire_drop_rear, tire_drop_front_per_lap, tire_drop_rear_per_lap, finish_pos, grid_pos, finish_status, laps_completed, pitstops';
   let linkedSessionsCountQuery = supabase
     .from('setup_sessions')
     .select('id', { count: 'exact', head: true })
