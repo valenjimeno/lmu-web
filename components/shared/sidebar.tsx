@@ -32,7 +32,13 @@ export function Sidebar({ pilotName, navigationBadges }: SidebarProps) {
         </div>
 
         <div className="mt-auto border-t border-white/8 bg-[rgba(8,10,14,0.92)] px-3 py-4 backdrop-blur-xl">
-          <PilotMenu pilotName={pilotName} className="w-full" align="right" side="top" />
+          <PilotMenu
+            pilotName={pilotName}
+            className="w-full"
+            menuClassName="w-full max-w-none"
+            align="right"
+            side="top"
+          />
         </div>
       </div>
     </aside>

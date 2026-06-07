@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useLinkStatus } from 'next/link';
 import { usePathname } from 'next/navigation';
 import { appNavigationItems } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils/cn';
@@ -36,13 +37,14 @@ export function AppNavigation({ orientation = 'vertical', className, badges }: A
             href={item.href}
             prefetch={false}
             className={cn(
-              'flex items-center gap-3 rounded-[1.35rem] px-4 py-3 text-sm font-semibold transition duration-200',
+              'group relative flex items-center gap-3 overflow-hidden rounded-[1.35rem] px-4 py-3 text-sm font-semibold transition duration-200',
               isHorizontal ? 'shrink-0' : 'w-full',
               isActive
                 ? 'border border-[rgba(225,178,122,0.24)] bg-[linear-gradient(135deg,rgba(225,178,122,0.16),rgba(255,255,255,0.08))] text-white shadow-[0_14px_28px_rgba(0,0,0,0.26)]'
                 : 'border border-transparent bg-transparent text-muted hover:border-white/8 hover:bg-white/[0.05] hover:text-foreground',
             )}
           >
+            <NavPendingWash />
             <NavIcon type={item.icon} />
             <span>{item.label}</span>
             {badgeCount > 0 ? (
@@ -58,10 +60,49 @@ export function AppNavigation({ orientation = 'vertical', className, badges }: A
                 {badgeCount}
               </span>
             ) : null}
+            <NavPendingHint />
           </Link>
         );
       })}
     </nav>
+  );
+}
+
+function NavPendingWash() {
+  const { pending } = useLinkStatus();
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200',
+        pending ? 'opacity-100' : 'opacity-0',
+      )}
+    >
+      <span className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(225,178,122,0.12),transparent)] motion-safe:animate-[nav-wash_1.1s_ease-in-out_infinite]" />
+    </span>
+  );
+}
+
+function NavPendingHint() {
+  const { pending } = useLinkStatus();
+
+  return (
+    <span aria-hidden="true" className="ml-auto flex h-5 w-7 shrink-0 items-center justify-end">
+      <span
+        className={cn(
+          'h-[3px] w-5 rounded-full bg-current/20 opacity-0 transition-all duration-200',
+          pending ? 'opacity-100' : 'translate-x-1',
+        )}
+      >
+        <span
+          className={cn(
+            'block h-full w-2 rounded-full bg-current/80 motion-safe:animate-[nav-pulse_0.9s_ease-in-out_infinite]',
+            pending ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+      </span>
+    </span>
   );
 }
 

@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { LogoutButton } from '@/components/features/auth/logout-button';
+import { FormPending } from '@/components/ui/form-pending';
+import { Spinner } from '@/components/ui/spinner';
 import { routes } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils/cn';
 
 type PilotMenuProps = {
   pilotName: string;
   className?: string;
+  menuClassName?: string;
   align?: 'left' | 'right';
   side?: 'top' | 'bottom';
 };
@@ -16,6 +18,7 @@ type PilotMenuProps = {
 export function PilotMenu({
   pilotName,
   className,
+  menuClassName,
   align = 'right',
   side = 'bottom',
 }: PilotMenuProps) {
@@ -79,9 +82,10 @@ export function PilotMenu({
       {isOpen ? (
         <div
           className={cn(
-            'absolute z-30 w-56 rounded-[1.1rem] border border-white/10 bg-[rgba(10,12,17,0.98)] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-xl',
+            'absolute z-30 w-56 max-w-[calc(100vw-2rem)] rounded-[1.1rem] border border-white/10 bg-[rgba(10,12,17,0.98)] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-xl',
             align === 'right' ? 'right-0' : 'left-0',
             side === 'bottom' ? 'top-[calc(100%+0.65rem)]' : 'bottom-[calc(100%+0.65rem)]',
+            menuClassName,
           )}
           role="menu"
           aria-label="Menú del piloto"
@@ -92,15 +96,28 @@ export function PilotMenu({
             className="flex items-center gap-3 rounded-[0.95rem] px-3 py-3 text-sm font-medium text-white/82 transition hover:bg-white/[0.05] hover:text-white"
             role="menuitem"
           >
-            <MenuIcon type="profile" />
-            Perfil
+            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+              <MenuIcon type="profile" />
+            </span>
+            <span className="text-sm font-medium">Perfil</span>
           </Link>
-          <div className="mt-1">
-            <LogoutButton
-              className="w-full justify-start rounded-[0.95rem] px-3 py-3 text-sm font-medium text-white/82 hover:bg-white/[0.05] hover:text-white"
-              fullWidth
-            />
-          </div>
+          <form action="/auth/signout" method="post" className="mt-1">
+            <FormPending>
+              {(pending) => (
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="flex w-full items-center gap-3 rounded-[0.95rem] px-3 py-3 text-left text-sm font-medium text-white/82 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-wait disabled:opacity-80"
+                  role="menuitem"
+                >
+                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+                    {pending ? <Spinner className="h-4 w-4" /> : <PowerIcon />}
+                  </span>
+                  <span className="text-sm font-medium">Cerrar sesión</span>
+                </button>
+              )}
+            </FormPending>
+          </form>
         </div>
       ) : null}
     </div>
@@ -142,4 +159,22 @@ function MenuIcon({ type }: { type: 'profile' }) {
   }
 
   return null;
+}
+
+function PowerIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-[17px] w-[17px] shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3v9" />
+      <path d="M7.05 5.52a8 8 0 1 0 9.9 0" />
+    </svg>
+  );
 }
