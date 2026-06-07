@@ -1,6 +1,6 @@
 import { login } from '@/app/(public)/login/actions';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SubmitButton } from '@/components/ui/submit-button';
 
 type LoginFormProps = {
   errorMessage?: string;
@@ -33,9 +33,9 @@ export function LoginForm({
           {errorMessage}
         </p>
       ) : null}
-      <Button type="submit" className="w-full">
+      <SubmitButton pendingLabel="Iniciando sesión..." className="w-full">
         Iniciar sesión
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

@@ -12,6 +12,8 @@ import {
   formatRaceDurationMinutes,
   formatWeatherSummary,
 } from '@/lib/utils/setup-formatters';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
+import type { TrackOption } from '@/services/catalog.service';
 import type { SetupComparisonFilters, SetupSummary } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
 
@@ -27,7 +29,7 @@ type CarOption = Option & {
 type SetupComparisonConsoleProps = {
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   filters: SetupComparisonFilters;
   defaultCarClassId?: string;
   setups: SetupSummary[];
@@ -224,7 +226,7 @@ export function SetupComparisonConsole({
                 <option value="">Selecciona circuito</option>
                 {tracks.map((track) => (
                   <option key={track.id} value={track.id}>
-                    {track.name}
+                    {getTrackDisplayName(track)}
                   </option>
                 ))}
               </select>

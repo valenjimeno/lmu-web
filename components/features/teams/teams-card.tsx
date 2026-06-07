@@ -7,8 +7,8 @@ import {
   revokeTeamInvitationAction,
   setActiveTeamAction,
 } from '@/app/(app)/equipos/actions';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { routes } from '@/lib/constants/routes';
 import type { UserEntitlements } from '@/services/entitlement.service';
 import type {
@@ -174,9 +174,9 @@ export function TeamsCard({
                       </span>
                       <form action={acceptTeamInvitationAction}>
                         <input type="hidden" name="token" value={invitation.token} />
-                        <Button type="submit" className="min-h-10 px-4 py-2">
+                        <SubmitButton pendingLabel="Aceptando..." className="min-h-10 px-4 py-2">
                           Aceptar
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>
@@ -311,9 +311,12 @@ export function TeamsCard({
               ) : null}
 
               <div className="flex justify-end">
-                <Button type="submit" disabled={!entitlements.canCreateTeams}>
+                <SubmitButton
+                  disabled={!entitlements.canCreateTeams}
+                  pendingLabel="Creando equipo..."
+                >
                   Crear equipo
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           </section>
@@ -382,9 +385,9 @@ export function TeamsCard({
                 ) : (
                   <form action={setActiveTeamAction} className="flex justify-end">
                     <input type="hidden" name="teamId" value={selectedTeam.id} />
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel="Activando equipo...">
                       Marcar como equipo activo
-                    </Button>
+                    </SubmitButton>
                   </form>
                 )}
               </div>
@@ -423,9 +426,13 @@ export function TeamsCard({
                           <form action={removeTeamMemberAction}>
                             <input type="hidden" name="teamId" value={selectedTeam.id} />
                             <input type="hidden" name="memberUserId" value={member.userId} />
-                            <Button type="submit" variant="ghost" className="min-h-10 px-3 py-2">
+                            <SubmitButton
+                              variant="ghost"
+                              pendingLabel="Quitando..."
+                              className="min-h-10 px-3 py-2"
+                            >
                               Quitar
-                            </Button>
+                            </SubmitButton>
                           </form>
                         ) : null}
                       </div>
@@ -490,9 +497,9 @@ export function TeamsCard({
               ) : null}
 
               <div className="flex justify-end">
-                <Button type="submit" disabled={!canInviteMembers}>
+                <SubmitButton disabled={!canInviteMembers} pendingLabel="Enviando invitación...">
                   Enviar invitación
-                </Button>
+                </SubmitButton>
               </div>
             </form>
 
@@ -518,9 +525,13 @@ export function TeamsCard({
                           <form action={revokeTeamInvitationAction}>
                             <input type="hidden" name="teamId" value={selectedTeam.id} />
                             <input type="hidden" name="invitationId" value={invitation.id} />
-                            <Button type="submit" variant="ghost" className="min-h-10 px-3 py-2">
+                            <SubmitButton
+                              variant="ghost"
+                              pendingLabel="Revocando..."
+                              className="min-h-10 px-3 py-2"
+                            >
                               Revocar
-                            </Button>
+                            </SubmitButton>
                           </form>
                         ) : null}
                       </div>

@@ -17,6 +17,9 @@ import {
   formatRaceDurationMinutes,
   formatWeatherSummary,
 } from '@/lib/utils/setup-formatters';
+import { getCarDisplayName } from '@/lib/utils/car-display';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
+import type { TrackOption } from '@/services/catalog.service';
 import type { SetupSessionLinkOption } from '@/services/setup-session-link.service';
 import type { SetupSummary } from '@/services/setup.service';
 import type { Database } from '@/types/database.types';
@@ -40,7 +43,7 @@ type ComparisonMetric = {
 type SetupsConsoleProps = {
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   filters: {
     query?: string;
     carClassId?: string;
@@ -161,7 +164,7 @@ export function SetupsConsole({
         filters.trackId
           ? {
               key: 'trackId',
-              label: `Circuito: ${tracks.find((track) => track.id === filters.trackId)?.name ?? ''}`,
+              label: `Circuito: ${getTrackDisplayName(tracks.find((track) => track.id === filters.trackId) ?? { name: '', official_name: null })}`,
             }
           : null,
         filters.setupType ? { key: 'setupType', label: 'Fixed' } : null,
@@ -401,7 +404,7 @@ export function SetupsConsole({
                 <option value="">Circuito</option>
                 {tracks.map((track) => (
                   <option key={track.id} value={track.id}>
-                    {track.name}
+                    {getTrackDisplayName(track)}
                   </option>
                 ))}
               </select>
@@ -529,7 +532,7 @@ export function SetupsConsole({
                     <option value="">Circuito</option>
                     {tracks.map((track) => (
                       <option key={track.id} value={track.id}>
-                        {track.name}
+                        {getTrackDisplayName(track)}
                       </option>
                     ))}
                   </select>
@@ -686,8 +689,13 @@ export function SetupsConsole({
                       </div>
 
                       <div className="col-span-3 grid grid-cols-2 gap-x-4 gap-y-3 lg:contents">
-                        <DataLine label="Coche" value={setup.carName} muted="" />
-                        <DataLine label="Circuito" value={setup.trackName} muted="" />
+                        <DataLine
+                          label="Coche"
+                          value={getCarDisplayName(setup.carName, setup.manufacturerName)}
+                          muted=""
+                          multiline
+                        />
+                        <DataLine label="Circuito" value={setup.trackName} muted="" multiline />
                         <DataLine
                           label="Tipo"
                           value={setup.setupType === 'fixed' ? 'Fixed' : 'Open'}
@@ -822,7 +830,7 @@ function InsightsPanel({
   setup: SetupSummary | null;
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   defaultCarClassId?: string;
   preferredDriverName?: string;
   availableSessionLinks: SetupSessionLinkOption[];
@@ -876,46 +884,26 @@ function InsightsPanel({
                 <SetupBadge>{resolveSetupAudience(setup, activeTeam)?.detail}</SetupBadge>
               </div>
             ) : null}
-            <div className="mt-3 space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  Clase
-                </span>
-                <span className="truncate text-right text-white/72">{setup.carClassName}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  Coche
-                </span>
-                <span className="truncate text-right text-white/72">
-                  {setup.manufacturerName} {setup.carName}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  Circuito
-                </span>
-                <span className="truncate text-right text-white/72">{setup.trackName}</span>
-              </div>
+            <div className="mt-4 space-y-3 text-sm">
+              <DetailLine label="Clase" value={setup.carClassName} compact />
+              <DetailLine
+                label="Coche"
+                value={getCarDisplayName(setup.carName, setup.manufacturerName)}
+              />
+              <DetailLine label="Circuito" value={setup.trackName} />
               {setup.weatherSummary ? (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    CLIMA
-                  </span>
-                  <span className="truncate text-right text-white/72">
-                    {formatWeatherSummary(setup.weatherSummary)}
-                  </span>
-                </div>
+                <DetailLine
+                  label="Clima"
+                  value={formatWeatherSummary(setup.weatherSummary)}
+                  compact
+                />
               ) : null}
               {setup.raceDurationMinutes !== null ? (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    DURACION
-                  </span>
-                  <span className="truncate text-right text-white/72">
-                    {formatRaceDurationMinutes(setup.raceDurationMinutes)}
-                  </span>
-                </div>
+                <DetailLine
+                  label="Duracion"
+                  value={formatRaceDurationMinutes(setup.raceDurationMinutes)}
+                  compact
+                />
               ) : null}
             </div>
           </div>
@@ -979,13 +967,60 @@ function InsightsPanel({
   );
 }
 
-function DataLine({ label, value, muted }: { label: string; value: string; muted?: string }) {
+function DetailLine({
+  label,
+  value,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[3.8rem_minmax(0,1fr)] items-start gap-3 border-b border-white/6 pb-3 last:border-b-0 last:pb-0">
+      <span className="pt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+        {label}
+      </span>
+      <span
+        className={
+          compact
+            ? 'text-right text-sm leading-5 text-white/72'
+            : 'text-right text-sm leading-5 text-white/72 break-words text-balance'
+        }
+        title={value}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function DataLine({
+  label,
+  value,
+  muted,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  muted?: string;
+  multiline?: boolean;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted lg:hidden">
         {label}
       </p>
-      <p className="truncate text-[15px] leading-6 text-white lg:text-sm">{value}</p>
+      <p
+        className={
+          multiline
+            ? 'line-clamp-2 text-[15px] leading-5 text-white lg:min-h-[2.5rem] lg:text-sm'
+            : 'truncate text-[15px] leading-6 text-white lg:text-sm'
+        }
+        title={value}
+      >
+        {value}
+      </p>
       {muted ? (
         <p className="truncate text-xs text-white/50 lg:mt-1 lg:text-sm lg:text-white/55">
           {muted}

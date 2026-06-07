@@ -11,6 +11,8 @@ import { Modal } from '@/components/ui/modal';
 import { routes } from '@/lib/constants/routes';
 import { formatDate, formatLapTime } from '@/lib/utils/setup-formatters';
 import { formatSessionType } from '@/lib/utils/session-type';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
+import type { TrackOption } from '@/services/catalog.service';
 import type { SessionImportJobSummary } from '@/services/session-import-job.service';
 import type { LatestImportedSessionReference, SessionSummary } from '@/services/session.service';
 
@@ -41,7 +43,7 @@ type SessionsConsoleProps = {
   sessionSettings: Option[];
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   filters: SessionConsoleFilters;
   defaultSourceSessionSetting: string;
   defaultCarClassId?: string;
@@ -87,6 +89,19 @@ function formatPositionDelta(value: number | null) {
 
 function buildCompactLabel(value: string, prefix: string) {
   return `${prefix}: ${value}`;
+}
+
+function buildSessionCarSubtitle(carName: string, manufacturerName: string) {
+  const trimmedManufacturerName = manufacturerName.trim();
+
+  if (!trimmedManufacturerName) {
+    return '';
+  }
+
+  const normalizedCarName = carName.trim().toLocaleLowerCase();
+  const normalizedManufacturerName = trimmedManufacturerName.toLocaleLowerCase();
+
+  return normalizedCarName.includes(normalizedManufacturerName) ? '' : trimmedManufacturerName;
 }
 
 function formatDeltaMs(value: number | null) {
@@ -277,7 +292,12 @@ export function SessionsConsole({
           ? {
               key: 'trackId',
               label: buildCompactLabel(
-                tracks.find((track) => track.id === filters.trackId)?.name ?? '',
+                getTrackDisplayName(
+                  tracks.find((track) => track.id === filters.trackId) ?? {
+                    name: '',
+                    official_name: null,
+                  },
+                ),
                 'Circuito',
               ),
             }
@@ -750,7 +770,7 @@ export function SessionsConsole({
                         <DataLine
                           label="Coche"
                           value={session.carName}
-                          muted={session.manufacturerName}
+                          muted={buildSessionCarSubtitle(session.carName, session.manufacturerName)}
                         />
                         <DataLine
                           label="Mejor vuelta"
@@ -856,7 +876,7 @@ function SessionsFiltersForm({
   sessionSettings: Option[];
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   filters: SessionConsoleFilters;
   defaultSourceSessionSetting: string;
   defaultCarClassId?: string;
@@ -1005,7 +1025,7 @@ function SessionsFiltersForm({
           <option value="">Circuito</option>
           {tracks.map((track) => (
             <option key={track.id} value={track.id}>
-              {track.name}
+              {getTrackDisplayName(track)}
             </option>
           ))}
         </select>
@@ -1089,7 +1109,7 @@ function SessionsFiltersForm({
               <option value="">Circuito</option>
               {tracks.map((track) => (
                 <option key={track.id} value={track.id}>
-                  {track.name}
+                  {getTrackDisplayName(track)}
                 </option>
               ))}
             </select>
@@ -1275,7 +1295,9 @@ function SessionInsightsPanel({
                   Coche
                 </span>
                 <span className="truncate text-right text-white/72">
-                  {[session.manufacturerName, session.carName].filter(Boolean).join(' ')}
+                  {buildSessionCarSubtitle(session.carName, session.manufacturerName)
+                    ? `${session.manufacturerName} ${session.carName}`
+                    : session.carName}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">

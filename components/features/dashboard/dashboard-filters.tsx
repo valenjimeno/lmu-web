@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
 import type { DashboardMode, DriverOverviewData } from '@/services/dashboard.service';
 
 type DashboardFiltersProps = {
@@ -99,7 +100,7 @@ export function DashboardFilters({
         trackId
           ? {
               key: 'trackId',
-              label: `Circuito: ${options.tracks.find((track) => track.id === trackId)?.name ?? ''}`,
+              label: `Circuito: ${getTrackDisplayName(options.tracks.find((track) => track.id === trackId) ?? { name: '', official_name: null })}`,
             }
           : null,
         carId
@@ -379,7 +380,7 @@ export function DashboardFilters({
                   <option value="">Circuito</option>
                   {options.tracks.map((track) => (
                     <option key={track.id} value={track.id}>
-                      {track.name}
+                      {getTrackDisplayName(track)}
                     </option>
                   ))}
                 </select>

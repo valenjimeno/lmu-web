@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
 import { getSetupCatalog, type CarOption } from '@/services/catalog.service';
 import type { Database } from '@/types/database.types';
 type ProfileOption = Pick<
@@ -326,7 +327,7 @@ export async function getSetupPageData(
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
   );
   const carsById = new Map(cars.map((car) => [car.id, car]));
-  const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
+  const tracksById = new Map(tracks.map((track) => [track.id, getTrackDisplayName(track)]));
 
   return {
     carClasses,
@@ -428,7 +429,7 @@ export async function getSetupComparisonData(userId: string, filters: SetupCompa
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
   );
   const carsById = new Map(cars.map((car) => [car.id, car]));
-  const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
+  const tracksById = new Map(tracks.map((track) => [track.id, getTrackDisplayName(track)]));
 
   return {
     carClasses,
@@ -500,7 +501,7 @@ export async function getSetupDetail(userId: string, setupId: string) {
     manufacturers.map((manufacturer) => [manufacturer.id, manufacturer.name]),
   );
   const carsById = new Map(cars.map((car) => [car.id, car]));
-  const tracksById = new Map(tracks.map((track) => [track.id, track.name]));
+  const tracksById = new Map(tracks.map((track) => [track.id, getTrackDisplayName(track)]));
   const favoriteSetupIds = new Set(favorites.map((favorite) => favorite.setup_id));
 
   return buildSetupSummary(

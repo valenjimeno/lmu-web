@@ -376,6 +376,65 @@ function coalesceNumber(...values: Array<number | null | undefined>) {
   return null;
 }
 
+function normalizeDisplayText(value: string | null | undefined) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function inferCatalogCar(
+  session: Pick<SessionIdentityRow, 'car_type'>,
+  carsById: Map<string, CarOption>,
+) {
+  const inferredCarName = session.car_type?.trim() || '';
+
+  if (!inferredCarName) {
+    return undefined;
+  }
+
+  const normalizedInferredCarName = normalizeDisplayText(inferredCarName);
+
+  return Array.from(carsById.values()).find((car) => {
+    const normalizedCarName = normalizeDisplayText(car.name);
+    return (
+      normalizedCarName === normalizedInferredCarName ||
+      normalizedCarName.includes(normalizedInferredCarName) ||
+      normalizedInferredCarName.includes(normalizedCarName)
+    );
+  });
+}
+
+function inferCatalogTrackId(
+  session: Pick<SessionIdentityRow, 'track_venue' | 'track_course'>,
+  tracksById: Map<string, string>,
+) {
+  const inferredTrackName = session.track_venue?.trim() || session.track_course?.trim() || '';
+
+  if (!inferredTrackName) {
+    return null;
+  }
+
+  const normalizedInferredTrackName = normalizeDisplayText(inferredTrackName);
+
+  for (const [trackId, trackName] of tracksById.entries()) {
+    const normalizedTrackName = normalizeDisplayText(trackName);
+
+    if (
+      normalizedTrackName === normalizedInferredTrackName ||
+      normalizedTrackName.includes(normalizedInferredTrackName) ||
+      normalizedInferredTrackName.includes(normalizedTrackName)
+    ) {
+      return trackId;
+    }
+  }
+
+  return null;
+}
+
 function buildSessionSummary(
   session: SessionIdentityRow,
   setup: SetupLinkRow | undefined,
@@ -383,7 +442,9 @@ function buildSessionSummary(
   tracksById: Map<string, string>,
   manufacturersById: Map<string, string>,
 ): SessionSummary {
-  const car = setup ? carsById.get(setup.car_id) : undefined;
+  const linkedCar = setup ? carsById.get(setup.car_id) : undefined;
+  const inferredCatalogCar = inferCatalogCar(session, carsById);
+  const car = inferredCatalogCar ?? linkedCar;
   const rawPayload =
     session.raw_payload && typeof session.raw_payload === 'object' ? session.raw_payload : null;
   const sessionNameFromPayload =
@@ -397,18 +458,19 @@ function buildSessionSummary(
   const inferredCarName = session.car_type?.trim() || 'Coche no disponible';
   const inferredTrackName =
     session.track_venue?.trim() || session.track_course?.trim() || 'Circuito no disponible';
+  const inferredTrackId = inferCatalogTrackId(session, tracksById);
 
   return {
     id: session.id,
     name: sessionNameFromPayload || fallbackFileName,
     setupId: session.setup_id,
     linkedSetupName: setup?.name ?? null,
-    carId: car?.id ?? setup?.car_id ?? null,
+    carId: car?.id ?? null,
     carClassId: car?.car_class_id ?? null,
-    carName: car?.name ?? inferredCarName,
+    carName: inferredCarName,
     manufacturerName: manufacturersById.get(car?.manufacturer_id ?? '') ?? '',
-    trackId: setup?.track_id ?? null,
-    trackName: setup ? (tracksById.get(setup.track_id) ?? inferredTrackName) : inferredTrackName,
+    trackId: inferredTrackId,
+    trackName: inferredTrackName,
     trackVenue: session.track_venue,
     driverName: session.driver_name?.trim() || 'Piloto no disponible',
     sourceFileName: session.source_file_name,

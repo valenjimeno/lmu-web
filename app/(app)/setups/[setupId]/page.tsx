@@ -18,7 +18,9 @@ import {
   SetupMetricCard,
 } from '@/components/features/setups/setup-ui';
 import { Button } from '@/components/ui/button';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { routes } from '@/lib/constants/routes';
+import { getCarDisplayName } from '@/lib/utils/car-display';
 import {
   formatBrakeBiasSplit,
   formatDate,
@@ -153,8 +155,8 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                   {setup.name}
                 </h2>
                 <p className="text-sm leading-7 text-muted">
-                  {setup.carClassName} · {setup.manufacturerName} {setup.carName} ·{' '}
-                  {setup.trackName}
+                  {setup.carClassName} · {getCarDisplayName(setup.carName, setup.manufacturerName)}{' '}
+                  · {setup.trackName}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <SetupBadge tone="accent">{setup.setupType}</SetupBadge>
@@ -259,9 +261,12 @@ async function SetupDetailContent({ params, searchParams }: SetupDetailPageProps
                         : 'Ajusta el nombre, el tipo y el contexto general antes de entrar a los controles del coche.'}
                     </p>
                   </div>
-                  <Button type="submit" className="w-full sm:w-auto">
+                  <SubmitButton
+                    pendingLabel={isDuplicateMode ? 'Guardando copia...' : 'Guardando cambios...'}
+                    className="w-full sm:w-auto"
+                  >
                     {isDuplicateMode ? 'Guardar copia' : 'Guardar cambios'}
-                  </Button>
+                  </SubmitButton>
                 </div>
 
                 <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_15rem]">

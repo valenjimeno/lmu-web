@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { updateProfileAction } from '@/app/(app)/profile/actions';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { routes } from '@/lib/constants/routes';
 import type { UserEntitlements } from '@/services/entitlement.service';
 import type { Profile } from '@/types/profile.types';
@@ -100,7 +100,7 @@ export function ProfileCard({ profile, entitlements, errorCode, successCode }: P
           </div>
 
           <div className="flex flex-col gap-3 border-t border-white/8 pt-5 sm:flex-row sm:items-center sm:justify-end">
-            <Button type="submit">Guardar perfil</Button>
+            <SubmitButton pendingLabel="Guardando perfil...">Guardar perfil</SubmitButton>
           </div>
         </form>
 

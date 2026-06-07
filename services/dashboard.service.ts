@@ -1,5 +1,6 @@
 import { createPerfTrace } from '@/lib/observability/perf';
 import { createClient } from '@/lib/supabase/server';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
 import { getSetupCatalog, type CarOption, type TrackOption } from '@/services/catalog.service';
 import type { Database } from '@/types/database.types';
 
@@ -158,7 +159,7 @@ export type DriverOverviewData = {
     sessionSettings: Array<{ id: string; name: string }>;
     carClasses: Array<{ id: string; name: string }>;
     cars: Array<{ id: string; name: string; carClassId: string }>;
-    tracks: Array<{ id: string; name: string }>;
+    tracks: Array<{ id: string; name: string; official_name: string | null }>;
     defaultCarClassId?: string;
     defaultSourceSessionSetting: string;
   };
@@ -1824,7 +1825,11 @@ export async function getDriverOverviewData(
       sessionSettings,
       carClasses: carClasses.map((carClass) => ({ id: carClass.id, name: carClass.name })),
       cars: cars.map((car) => ({ id: car.id, name: car.name, carClassId: car.car_class_id })),
-      tracks: tracks.map((track) => ({ id: track.id, name: track.name })),
+      tracks: tracks.map((track) => ({
+        id: track.id,
+        name: getTrackDisplayName(track),
+        official_name: track.official_name,
+      })),
       defaultCarClassId,
       defaultSourceSessionSetting,
     },

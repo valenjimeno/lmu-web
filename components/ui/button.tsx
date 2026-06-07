@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
+import { Spinner } from '@/components/ui/spinner';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 
 type BaseProps = {
   children: ReactNode;
   className?: string;
+  isLoading?: boolean;
+  loadingLabel?: ReactNode;
   variant?: ButtonVariant;
 };
 
@@ -34,7 +37,7 @@ const variants: Record<ButtonVariant, string> = {
 
 export function Button(props: ButtonProps) {
   const className = cn(
-    'inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold tracking-[0.01em] transition duration-200 focus:outline-none focus:ring-2 focus:ring-[rgba(241,196,135,0.28)] focus:ring-offset-0',
+    'inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold tracking-[0.01em] transition duration-200 focus:outline-none focus:ring-2 focus:ring-[rgba(241,196,135,0.28)] focus:ring-offset-0 disabled:cursor-wait disabled:opacity-80 disabled:hover:brightness-100',
     variants[props.variant ?? 'primary'],
     props.className,
   );
@@ -50,14 +53,19 @@ export function Button(props: ButtonProps) {
   const {
     children,
     className: _className,
+    isLoading,
+    loadingLabel,
     variant: _variant,
     asChild: _asChild,
     ...buttonProps
   } = props;
 
   return (
-    <button className={className} {...buttonProps}>
-      {children}
+    <button className={className} disabled={buttonProps.disabled || isLoading} {...buttonProps}>
+      <span className="inline-flex items-center gap-2">
+        {isLoading ? <Spinner className="h-4 w-4 text-current" /> : null}
+        <span>{isLoading ? (loadingLabel ?? children) : children}</span>
+      </span>
     </button>
   );
 }

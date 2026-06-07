@@ -2,9 +2,9 @@
 
 import { usePathname } from 'next/navigation';
 import { completeRequiredProfileAction } from '@/app/(app)/profile/actions';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { SubmitButton } from '@/components/ui/submit-button';
 import type { Profile } from '@/types/profile.types';
 
 type CompleteProfileModalProps = {
@@ -71,7 +71,7 @@ export function CompleteProfileModal({ profile }: CompleteProfileModalProps) {
         </div>
 
         <div className="flex justify-end border-t border-white/8 pt-5">
-          <Button type="submit">Guardar y continuar</Button>
+          <SubmitButton pendingLabel="Guardando perfil...">Guardar y continuar</SubmitButton>
         </div>
       </form>
     </Modal>

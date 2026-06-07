@@ -109,7 +109,13 @@ function ImportSessionsSubmitButton({
   isSubmitting: boolean;
 }) {
   return (
-    <Button type="submit" disabled={!canSubmit || isSubmitting} className="w-full sm:w-auto">
+    <Button
+      type="submit"
+      disabled={!canSubmit || isSubmitting}
+      isLoading={isSubmitting}
+      loadingLabel="Preparando importación..."
+      className="w-full sm:w-auto"
+    >
       {isSubmitting ? 'Preparando importacion...' : submitLabel}
     </Button>
   );

@@ -1,4 +1,5 @@
 import { cacheLife, cacheTag, revalidateTag } from 'next/cache';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
 import { createPublicClient } from '@/lib/supabase/public-server';
 import type { Database } from '@/types/database.types';
 
@@ -17,7 +18,9 @@ export type CarOption = Pick<
 export type TrackOption = Pick<
   Database['public']['Tables']['tracks']['Row'],
   'id' | 'name' | 'slug' | 'official_name' | 'city'
->;
+> & {
+  label: string;
+};
 
 export type SetupCatalog = {
   carClasses: CarClassOption[];
@@ -62,7 +65,17 @@ export async function getSetupCatalog(): Promise<SetupCatalog> {
     carClasses: (carClassesResult.data ?? []) as CarClassOption[],
     manufacturers: (manufacturersResult.data ?? []) as ManufacturerOption[],
     cars: (carsResult.data ?? []) as CarOption[],
-    tracks: (tracksResult.data ?? []) as TrackOption[],
+    tracks: (
+      (tracksResult.data ?? []) as Array<
+        Pick<
+          Database['public']['Tables']['tracks']['Row'],
+          'id' | 'name' | 'slug' | 'official_name' | 'city'
+        >
+      >
+    ).map((track) => ({
+      ...track,
+      label: getTrackDisplayName(track),
+    })),
   };
 }
 

@@ -14,9 +14,12 @@ import { RangeField } from '@/components/features/setups/range-field';
 import { SessionLinkSelector } from '@/components/features/setups/session-link-selector';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { routes } from '@/lib/constants/routes';
 import { buildBrakeBiasValues } from '@/lib/utils/brake-bias';
 import { formatLapTime, formatSetupVisibility } from '@/lib/utils/setup-formatters';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
+import type { TrackOption } from '@/services/catalog.service';
 import type { SetupSessionLinkOption } from '@/services/setup-session-link.service';
 import type { SetupSummary } from '@/services/setup.service';
 
@@ -34,7 +37,7 @@ type WeatherValue = 'sun' | 'sun-cloud' | 'rain';
 type SetupFormModalProps = {
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   defaultCarClassId?: string;
   activeTeam?: {
     id: string;
@@ -76,7 +79,7 @@ type SetupFormModalProps = {
 type CreateSetupModalProps = {
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   defaultCarClassId?: string;
   activeTeam?: {
     id: string;
@@ -90,7 +93,7 @@ type CreateSetupModalProps = {
 type EditSetupModalProps = {
   carClasses: Option[];
   cars: CarOption[];
-  tracks: Option[];
+  tracks: TrackOption[];
   defaultCarClassId?: string;
   activeTeam?: {
     id: string;
@@ -397,7 +400,7 @@ function SetupFormModal({
                   </option>
                   {tracks.map((track) => (
                     <option key={track.id} value={track.id}>
-                      {track.name}
+                      {getTrackDisplayName(track)}
                     </option>
                   ))}
                 </select>
@@ -639,7 +642,11 @@ function SetupFormModal({
                 <Button type="button" variant="secondary" onClick={() => setIsOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit">{isDuplicateMode ? 'Guardar copia' : submitLabel}</Button>
+                <SubmitButton
+                  pendingLabel={isDuplicateMode ? 'Guardando copia...' : 'Guardando setup...'}
+                >
+                  {isDuplicateMode ? 'Guardar copia' : submitLabel}
+                </SubmitButton>
               </div>
             </form>
 

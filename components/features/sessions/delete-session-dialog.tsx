@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { deleteSessionAction } from '@/app/(app)/sesiones/actions';
 import { Button } from '@/components/ui/button';
+import { FormPending } from '@/components/ui/form-pending';
 import { Modal } from '@/components/ui/modal';
 
 type DeleteSessionDialogProps = {
@@ -89,12 +90,19 @@ export function DeleteSessionDialog({
                 <Button type="button" variant="secondary" onClick={() => setIsOpen(false)}>
                   Cancelar
                 </Button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center rounded-full border border-[#ff6b5738] bg-[#7b2f26] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
-                >
-                  Sí, eliminar sesión
-                </button>
+                <FormPending>
+                  {(pending) => (
+                    <Button
+                      type="submit"
+                      className="border-[#ff6b5738] bg-[#7b2f26] text-white hover:brightness-110"
+                      disabled={pending}
+                      isLoading={pending}
+                      loadingLabel="Eliminando sesión..."
+                    >
+                      Sí, eliminar sesión
+                    </Button>
+                  )}
+                </FormPending>
               </div>
             </form>
           </div>

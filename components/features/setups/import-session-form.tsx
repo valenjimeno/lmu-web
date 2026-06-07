@@ -7,7 +7,7 @@ import {
   findPreferredDriverName,
   type MatchState,
 } from '@/components/features/sessions/import-session-client';
-import { Button } from '@/components/ui/button';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { detectSessionTypeFromXml, formatSessionType } from '@/lib/utils/session-type';
 
 type ImportSessionFormProps = {
@@ -175,9 +175,13 @@ export function ImportSessionForm({
         </div>
       ) : null}
 
-      <Button type="submit" disabled={!canSubmit} className="w-full sm:w-auto">
+      <SubmitButton
+        disabled={!canSubmit}
+        pendingLabel="Importando sesión..."
+        className="w-full sm:w-auto"
+      >
         {submitLabel}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

@@ -3,7 +3,10 @@
 import { useMemo, useState } from 'react';
 import Form from 'next/form';
 import { Button } from '@/components/ui/button';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { routes } from '@/lib/constants/routes';
+import { getTrackDisplayName } from '@/lib/utils/track-display';
+import type { TrackOption } from '@/services/catalog.service';
 import type { Database } from '@/types/database.types';
 
 type Option = {
@@ -13,7 +16,7 @@ type Option = {
 
 type CollapsibleFiltersProps = {
   cars: Option[];
-  tracks: Option[];
+  tracks: TrackOption[];
   filters: {
     query?: string;
     carId?: string;
@@ -139,7 +142,7 @@ export function CollapsibleFilters({
                 <option value="">Todos los circuitos</option>
                 {tracks.map((track) => (
                   <option key={track.id} value={track.id}>
-                    {track.name}
+                    {getTrackDisplayName(track)}
                   </option>
                 ))}
               </select>
@@ -172,9 +175,9 @@ export function CollapsibleFilters({
             </label>
 
             <div className="flex gap-2 lg:justify-end">
-              <Button type="submit" className="flex-1 px-4 lg:flex-none">
+              <SubmitButton pendingLabel="Aplicando..." className="flex-1 px-4 lg:flex-none">
                 Aplicar
-              </Button>
+              </SubmitButton>
               {hasActiveFilters ? (
                 <Button
                   href={routes.setups}
