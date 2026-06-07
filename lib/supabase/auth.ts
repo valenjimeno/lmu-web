@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { routes } from '@/lib/constants/routes';
+import type { User } from '@supabase/supabase-js';
 
 export const authRedirectParam = 'redirectTo';
 
@@ -14,10 +15,7 @@ const protectedRoutePrefixes = [
 
 export async function getCurrentUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
 
   if (error) {
     if (error.message === 'Auth session missing!') {
@@ -27,7 +25,20 @@ export async function getCurrentUser() {
     throw error;
   }
 
-  return user;
+  const claims = data?.claims;
+
+  if (!claims?.sub) {
+    return null;
+  }
+
+  return {
+    id: claims.sub,
+    email: typeof claims.email === 'string' ? claims.email : null,
+    user_metadata:
+      claims.user_metadata && typeof claims.user_metadata === 'object' ? claims.user_metadata : {},
+    app_metadata:
+      claims.app_metadata && typeof claims.app_metadata === 'object' ? claims.app_metadata : {},
+  } as User;
 }
 
 export function isAuthRoute(pathname: string) {
